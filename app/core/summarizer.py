@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Optional
+import re
 
 from app.core.config import get_settings
 from app.models.summary import MeetingSummary
@@ -11,18 +11,42 @@ from app.services.openai_client import get_openai_client
 
 logger = logging.getLogger(__name__)
 
+# Constante para limite de resumo
+SUMMARY_PREVIEW_LENGTH = 500
+
+
+def _extract_json_from_content(content: str) -> dict | None:
+    """Extrai JSON de uma string de conteúdo."""
+    json_match = re.search(r"\{.*\}", content, re.DOTALL)
+    if json_match:
+        try:
+            return json.loads(json_match.group())
+        except json.JSONDecodeError:
+            return None
+    return None
+
+
+def _create_fallback_summary(text: str) -> MeetingSummary:
+    """Cria um resumo básico como fallback."""
+    preview = text[:SUMMARY_PREVIEW_LENGTH] + "..." if len(text) > SUMMARY_PREVIEW_LENGTH else text
+    return MeetingSummary(
+        title="Transcrição Processada",
+        summary=preview,
+        key_points=["Não foi possível extrair pontos principais automaticamente"],
+        decisions=[],
+        action_items=[],
+        insights=["Revise a transcrição manualmente para extrair insights"],
+    )
+
 
 def summarize_transcript(
     transcript: Transcript | str,
     *,
-    model: Optional[str] = None,
-    temperature: Optional[float] = None,
-    extra_context: Optional[str] = None,
+    model: str | None = None,
+    temperature: float | None = None,
+    extra_context: str | None = None,
 ) -> MeetingSummary:
-    """
-    Gera ata/insights estruturados a partir do transcript usando o Responses API.
-    Retorna um MeetingSummary validado pelo Pydantic.
-    """
+    """Gera ata/insights estruturados a partir do transcript usando a API de chat."""
     settings = get_settings()
     client = get_openai_client()
 
@@ -31,83 +55,91 @@ def summarize_transcript(
 
     text = transcript.text if isinstance(transcript, Transcript) else str(transcript)
 
-    system_prompt = MeetingSummary.system_instructions()
+    # Instruções do sistema
+    system_prompt = """Você é um assistente especialista em reuniões corporativas.
+    Dado o transcript em português do Brasil, gere uma ata clara e objetiva.
+
+    Retorne um JSON válido com a seguinte estrutura:
+    {
+        "title": "Título da reunião (opcional)",
+        "summary": "Resumo executivo em português",
+        "key_points": ["Lista de pontos principais discutidos"],
+        "decisions": ["Lista de decisões tomadas"],
+        "action_items": [
+            {
+                "description": "Tarefa a ser executada",
+                "owner": "Responsável (opcional)",
+                "due_date": "Prazo (opcional, formato AAAA-MM-DD ou texto)"
+            }
+        ],
+        "insights": ["Lista de insights relevantes, métricas ou riscos identificados"]
+    }
+
+    Seja fiel ao conteúdo, use português natural e destaque decisões e tarefas importantes.
+    Retorne APENAS o JSON, sem explicações adicionais."""
+
+    # Prompt do usuário
     user_prompt = (
         "Transcrição em português do Brasil abaixo. Extraia uma ata clara, decisões, itens de ação e insights.\n\n"
-        f"{('Contexto adicional:\n' + extra_context + '\n\n') if extra_context else ''}"
-        "Transcript:\n"
-        f"{text}"
     )
 
-    # Construímos o schema diretamente do Pydantic para obter JSON validado
-    schema = MeetingSummary.model_json_schema()
+    if extra_context:
+        user_prompt += f"Contexto adicional:\n{extra_context}\n\n"
 
-    logger.info(f"Gerando ata/insights | modelo={model}")
+    user_prompt += f"Transcript:\n{text}"
+
+    logger.info("Gerando ata/insights | modelo=%s", model)
 
     try:
-        resp = client.responses.create(
+        # Usa a API de chat completions padrão
+        response = client.chat.completions.create(
             model=model,
-            input=[
-                {
-                    "role": "system",
-                    "content": [{"type": "text", "text": system_prompt}],
-                },
-                {"role": "user", "content": [{"type": "text", "text": user_prompt}]},
-            ],
+            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
             temperature=temperature,
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "MeetingSummary",
-                    "schema": schema,
-                    "strict": True,
-                },
-            },
+            response_format={"type": "json_object"},
+            max_tokens=4000,
         )
-    except Exception as e:
-        logger.error(f"Erro na API de resumo: {e}")
-        raise
 
-    # Quando usamos json_schema strict, o SDK expõe 'output_parsed'
-    parsed = getattr(resp, "output_parsed", None)
-    if parsed is None:
-        # fallback: tenta extrair texto e fazer json.loads
+        content = response.choices[0].message.content
+
         try:
-            # resp.output_text pode existir nas versões recentes
-            text_out = getattr(resp, "output_text", None)
-            if not text_out:
-                # fallback para estrutura de content
-                resp_dict = getattr(resp, "to_dict", None)
-                if callable(resp_dict):
-                    rd = resp_dict()
-                else:
-                    rd = json.loads(resp.model_dump_json())  # type: ignore
-                # Tenta achar algum texto
-                text_out = ""
-                for item in rd.get("output", []):
-                    for c in item.get("content", []):
-                        if c.get("type") in ("output_text", "text") and isinstance(
-                            c.get("text"), str
-                        ):
-                            text_out += c["text"]
-                if not text_out:
-                    raise ValueError(
-                        "Não foi possível extrair texto de saída do modelo."
-                    )
-            parsed = json.loads(text_out)
-        except Exception as e:
-            logger.error(f"Falha ao interpretar JSON do resumo: {e}")
-            raise
+            parsed = json.loads(content)
+        except json.JSONDecodeError as e:
+            logger.exception("Falha ao fazer parse do JSON")
+            logger.debug("Resposta recebida: %s", content[:500])
 
-    try:
+            parsed = _extract_json_from_content(content)
+            if not parsed:
+                msg = f"Não foi possível extrair JSON válido da resposta: {e}"
+                raise ValueError(msg) from e
+
         summary = MeetingSummary.model_validate(parsed)
+
     except Exception as e:
-        logger.error(f"Falha ao validar MeetingSummary: {e}")
-        # Loga o JSON para depuração
-        logger.debug(
-            f"JSON recebido para validação: {json.dumps(parsed, ensure_ascii=False)[:2000]}"
-        )
-        raise
+        logger.exception("Erro na API de resumo")
+        logger.info("Tentando fallback sem response_format...")
+
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+                temperature=temperature,
+                max_tokens=4000,
+            )
+
+            content = response.choices[0].message.content
+            parsed = _extract_json_from_content(content)
+
+            if parsed:
+                summary = MeetingSummary.model_validate(parsed)
+            else:
+                logger.warning("Criando resumo básico como fallback")
+                summary = _create_fallback_summary(text)
+
+        except Exception as fallback_error:
+            logger.exception("Fallback também falhou")
+            msg = f"Não foi possível gerar o resumo: {e}"
+            raise ValueError(msg) from fallback_error
 
     logger.info("Ata/insights gerados com sucesso")
     return summary
