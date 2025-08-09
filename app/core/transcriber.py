@@ -62,7 +62,9 @@ def transcribe_file(
 
     client = get_openai_client()
 
-    logger.info(f"Iniciando transcrição | arquivo={file_path} | modelo={model} | formato={response_format}")
+    logger.info(
+        f"Iniciando transcrição | arquivo={file_path} | modelo={model} | formato={response_format}"
+    )
 
     # Abre o arquivo como binário
     with open(file_path, "rb") as f:
@@ -112,7 +114,9 @@ def transcribe_file(
     # Quando response_format == "verbose_json", result contém segments
     if response_format == "verbose_json":
         data = to_dict(result)
-        transcript = Transcript.from_verbose_json(data, fallback_language=language, source_path=file_path)
+        transcript = Transcript.from_verbose_json(
+            data, fallback_language=language, source_path=file_path
+        )
     elif response_format in ("srt", "vtt"):
         # SRT/VTT são strings formatadas; guardamos também o texto limpo
         text_value = getattr(result, "text", None)
@@ -120,20 +124,26 @@ def transcribe_file(
             # Tentar extrair do dict
             data = to_dict(result)
             text_value = data.get("text") or ""
-        transcript = Transcript(text=text_value, language=language, segments=None, source_path=file_path)
+        transcript = Transcript(
+            text=text_value, language=language, segments=None, source_path=file_path
+        )
     else:
         # 'text' e 'json' normalmente retornam 'text'
         text_value = getattr(result, "text", None)
         if not isinstance(text_value, str):
             data = to_dict(result)
             text_value = data.get("text") or ""
-        transcript = Transcript(text=text_value, language=language, segments=None, source_path=file_path)
+        transcript = Transcript(
+            text=text_value, language=language, segments=None, source_path=file_path
+        )
 
     logger.info("Transcrição concluída com sucesso")
     return transcript
 
 
-def save_transcript(transcript: Transcript, output_path: str, as_format: Literal["json", "txt"] = "json") -> None:
+def save_transcript(
+    transcript: Transcript, output_path: str, as_format: Literal["json", "txt"] = "json"
+) -> None:
     """
     Salva a transcrição em JSON (modelo Pydantic) ou texto simples.
     """

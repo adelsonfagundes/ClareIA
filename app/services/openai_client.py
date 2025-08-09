@@ -11,5 +11,9 @@ from app.core.config import get_settings
 def get_openai_client() -> OpenAI:
     settings = get_settings()
     # O SDK usa OPENAI_API_KEY do ambiente; passamos explicitamente para clareza
-    client = OpenAI(api_key=settings.openai_api_key, timeout=settings.openai_timeout, max_retries=settings.openai_max_retries)
+    client = OpenAI(
+        api_key=settings.openai_api_key,
+        timeout=settings.openai_timeout,
+        max_retries=settings.openai_max_retries,
+    )
     return client

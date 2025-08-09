@@ -95,14 +95,21 @@ def build_parser() -> argparse.ArgumentParser:
         prog="app",
         description="Ferramenta para transcrever áudios e gerar ata/insights com OpenAI.",
     )
-    parser.add_argument("--verbose", action="store_true", help="Ativa logs em nível DEBUG")
+    parser.add_argument(
+        "--verbose", action="store_true", help="Ativa logs em nível DEBUG"
+    )
 
     sub = parser.add_subparsers(dest="command", required=True)
 
     # Subcomando: transcribe
     p_tr = sub.add_parser("transcribe", help="Transcreve um arquivo de áudio (mp3/wav)")
     p_tr.add_argument("input", help="Caminho para o arquivo .mp3 ou .wav")
-    p_tr.add_argument("-m", "--model", default=None, help="Modelo de transcrição (ex: gpt-4o-transcribe, whisper-1)")
+    p_tr.add_argument(
+        "-m",
+        "--model",
+        default=None,
+        help="Modelo de transcrição (ex: gpt-4o-transcribe, whisper-1)",
+    )
     p_tr.add_argument("-l", "--language", default=None, help="Idioma (ex: pt)")
     p_tr.add_argument(
         "-f",
@@ -111,9 +118,22 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["text", "json", "verbose_json", "srt", "vtt"],
         help="Formato de saída da API de transcrição (recomendado: json ou verbose_json)",
     )
-    p_tr.add_argument("--prompt", default=None, help="Dica contextual (nomes próprios, termos técnicos)")
-    p_tr.add_argument("-o", "--output", default=None, help="Arquivo para salvar a transcrição (json ou txt)")
-    p_tr.add_argument("--save-json", action="store_true", help="Força salvar a transcrição como JSON (default é txt se format=text)")
+    p_tr.add_argument(
+        "--prompt",
+        default=None,
+        help="Dica contextual (nomes próprios, termos técnicos)",
+    )
+    p_tr.add_argument(
+        "-o",
+        "--output",
+        default=None,
+        help="Arquivo para salvar a transcrição (json ou txt)",
+    )
+    p_tr.add_argument(
+        "--save-json",
+        action="store_true",
+        help="Força salvar a transcrição como JSON (default é txt se format=text)",
+    )
     p_tr.set_defaults(func=cmd_transcribe)
 
     # Subcomando: summarize
@@ -125,10 +145,28 @@ def build_parser() -> argparse.ArgumentParser:
         "input",
         help="Caminho do transcript (.json/.txt) ou do arquivo de áudio (.mp3/.wav)",
     )
-    p_sm.add_argument("-m", "--model", default=None, help="Modelo para resumo (ex: gpt-4o-mini)")
-    p_sm.add_argument("-t", "--temperature", type=float, default=None, help="Temperatura do modelo (0.0 a 1.0)")
-    p_sm.add_argument("-c", "--context", default=None, help="Contexto adicional (ex: participantes, objetivo da reunião)")
-    p_sm.add_argument("-o", "--output", default=None, help="Arquivo de saída (.json) para a ata/insights")
+    p_sm.add_argument(
+        "-m", "--model", default=None, help="Modelo para resumo (ex: gpt-4o-mini)"
+    )
+    p_sm.add_argument(
+        "-t",
+        "--temperature",
+        type=float,
+        default=None,
+        help="Temperatura do modelo (0.0 a 1.0)",
+    )
+    p_sm.add_argument(
+        "-c",
+        "--context",
+        default=None,
+        help="Contexto adicional (ex: participantes, objetivo da reunião)",
+    )
+    p_sm.add_argument(
+        "-o",
+        "--output",
+        default=None,
+        help="Arquivo de saída (.json) para a ata/insights",
+    )
     p_sm.set_defaults(func=cmd_summarize)
 
     return parser
