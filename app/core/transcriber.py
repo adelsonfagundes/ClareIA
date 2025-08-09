@@ -12,7 +12,7 @@ from app.services.openai_client import get_openai_client
 
 logger = logging.getLogger(__name__)
 
-# Garante mapeamentos comuns para reconhecimento do tipo
+# Garantir mapeamentos comuns para reconhecimento do tipo
 mimetypes.add_type("audio/mp4", ".m4a")
 mimetypes.add_type("audio/mpeg", ".mp3")
 mimetypes.add_type("audio/wav", ".wav")
@@ -47,6 +47,45 @@ def _ensure_audio(file_path: str) -> None:
     )
 
 
+def _is_gpt4o_transcribe(model: str) -> bool:
+    m = (model or "").lower()
+    return m.startswith("gpt-4o-transcribe")
+
+
+def _is_whisper_model(model: str) -> bool:
+    m = (model or "").lower()
+    return m.startswith("whisper")
+
+
+def _validate_model_and_format(
+    model: str, response_format: SupportedResponseFormat
+) -> None:
+    """
+    gpt-4o-transcribe: suporta apenas 'json' e 'text'.
+    whisper-1: suporta 'text', 'json', 'verbose_json', 'srt', 'vtt'.
+    """
+    if _is_gpt4o_transcribe(model):
+        if response_format not in {"json", "text"}:
+            raise ValueError(
+                f"O modelo '{model}' não suporta '{response_format}'. "
+                "Use '--format json' ou '--format text', ou troque para '-m whisper-1' "
+                "se precisar de 'verbose_json'/'srt'/'vtt'."
+            )
+    elif _is_whisper_model(model):
+        if response_format not in {"text", "json", "verbose_json", "srt", "vtt"}:
+            raise ValueError(
+                f"O formato '{response_format}' não é suportado por '{model}'. "
+                "Use um dos: text, json, verbose_json, srt, vtt."
+            )
+    else:
+        # Desconhecido: permitir apenas text/json para segurança
+        if response_format not in {"json", "text"}:
+            raise ValueError(
+                f"O formato '{response_format}' pode não ser suportado por '{model}'. "
+                "Use 'json' ou 'text', ou escolha '-m whisper-1' para formatos avançados."
+            )
+
+
 def transcribe_file(
     file_path: str,
     *,
@@ -74,6 +113,9 @@ def transcribe_file(
     model = model or settings.default_transcribe_model
     language = language or settings.default_language
     response_format = response_format or settings.default_response_format
+
+    # Valida compatibilidade antes de chamar a API
+    _validate_model_and_format(model, response_format)
 
     client = get_openai_client()
 
@@ -165,7 +207,7 @@ def save_transcript(
     os.makedirs(os.path.dirname(os.path.abspath(output_path)) or ".", exist_ok=True)
     if as_format == "json":
         with open(output_path, "w", encoding="utf-8") as f:
-            f.write(transcript.model_dump_json(ensure_ascii=False, indent=2))
+            json.dump(transcript.model_dump(), f, ensure_ascii=False, indent=2)
     elif as_format == "txt":
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(transcript.text)

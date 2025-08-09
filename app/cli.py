@@ -33,7 +33,7 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
         args.input,
         model=model,
         language=language,
-        response_format=response_format,  # 'json' ou 'verbose_json' recomendados
+        response_format=response_format,  # 'json' ou 'verbose_json' (se whisper-1)
         prompt=args.prompt,
     )
 
@@ -81,11 +81,11 @@ def cmd_summarize(args: argparse.Namespace) -> int:
     if args.output:
         os.makedirs(os.path.dirname(os.path.abspath(args.output)) or ".", exist_ok=True)
         with open(args.output, "w", encoding="utf-8") as f:
-            f.write(summary.model_dump_json(ensure_ascii=False, indent=2))
+            json.dump(summary.model_dump(), f, ensure_ascii=False, indent=2)
         print(f"{Fore.GREEN}Ata/insights salvos em{Style.RESET_ALL} {args.output}")
     else:
         print(f"{Fore.MAGENTA}Ata/Insights:{Style.RESET_ALL}\n")
-        print(summary.model_dump_json(ensure_ascii=False, indent=2))
+        print(json.dumps(summary.model_dump(), ensure_ascii=False, indent=2))
 
     return 0
 
@@ -93,7 +93,13 @@ def cmd_summarize(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="app",
-        description="Ferramenta para transcrever áudios e gerar ata/insights com OpenAI.",
+        description=(
+            "Ferramenta para transcrever áudios e gerar ata/insights com OpenAI.\n\n"
+            "Compatibilidade de formatos:\n"
+            "- gpt-4o-transcribe: suporta apenas response_format = json ou text\n"
+            "- whisper-1: suporta json, text, verbose_json, srt, vtt"
+        ),
+        formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.add_argument(
         "--verbose", action="store_true", help="Ativa logs em nível DEBUG"
@@ -118,7 +124,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--format",
         default=None,
         choices=["text", "json", "verbose_json", "srt", "vtt"],
-        help="Formato de saída da API de transcrição (recomendado: json ou verbose_json)",
+        help=(
+            "Formato de saída da API de transcrição.\n"
+            "- gpt-4o-transcribe: use 'json' ou 'text'\n"
+            "- whisper-1: permite 'verbose_json'/'srt'/'vtt' (além de 'json'/'text')"
+        ),
     )
     p_tr.add_argument(
         "--prompt",

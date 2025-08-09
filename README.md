@@ -1,7 +1,7 @@
 # ClareIA — Transcriber & Summarizer (pt-BR)
 
 Ferramenta em Python 3.13 para:
-- Transcrever áudios (.mp3/.wav) em português do Brasil usando OpenAI
+- Transcrever áudios (.mp3/.wav/.m4a) em português do Brasil usando OpenAI
 - Gerar ata, decisões, itens de ação e insights estruturados prontos para uso com modelos da OpenAI
 
 Este README explica passo a passo como instalar, configurar, usar a CLI e inclui um “Cheat Sheet” com os comandos mais comuns.
@@ -37,7 +37,7 @@ Este README explica passo a passo como instalar, configurar, usar a CLI e inclui
 pip install -r requirements.txt
 ```
 
-3) Configure suas variáveis (agora com auto-load de .env):
+3) Configure suas variáveis (auto-load de .env habilitado):
 - Opção A — via .env (recomendado para dev):
   - Copie o exemplo:
     - Windows:
@@ -71,6 +71,15 @@ Observações:
 
 ---
 
+## Compatibilidade de formatos por modelo
+
+- gpt-4o-transcribe: suporta apenas `response_format = json` ou `text`.
+- whisper-1: suporta `text`, `json`, `verbose_json`, `srt`, `vtt` (inclui segments/timestamps).
+
+Se você precisa de segments/timestamps, use `-m whisper-1` com `--format verbose_json` (ou `srt`/`vtt`).
+
+---
+
 ## Visão Geral da CLI
 
 - Executável principal:
@@ -78,7 +87,7 @@ Observações:
   python -m app.cli [--verbose] <comando> [opções]
   ```
 - Comandos disponíveis:
-  - `transcribe`: transcreve um arquivo de áudio (.mp3/.wav)
+  - `transcribe`: transcreve um arquivo de áudio (.mp3/.wav/.m4a)
   - `summarize`: gera ata/insights a partir de um transcript (.json/.txt) ou diretamente de um áudio (transcreve e resume)
 
 - Flag global:
@@ -93,7 +102,7 @@ python -m app.cli -h
 
 ## 🧾 Cheat Sheet (comandos rápidos)
 
-Dica: paths com espaços devem ser entre aspas. Ex.: "C:\Meus Áudios\reuniao.mp3"
+Dica: paths com espaços devem ser entre aspas. Ex.: "C:\Meus Áudios\reuniao.m4a"
 
 ### 1) Setup rápido
 
@@ -113,58 +122,48 @@ Dica: paths com espaços devem ser entre aspas. Ex.: "C:\Meus Áudios\reuniao.mp
 
 ### 2) Transcrever áudio
 
-- JSON detalhado (com segmentos, se disponíveis):
+- JSON simples (gpt-4o-transcribe):
   - Windows:
     ```powershell
-    python -m app.cli transcribe .\audios\reuniao.mp3 --format verbose_json -o .\saida\transcript.json --save-json
+    python -m app.cli transcribe ".\audios\reuniao.m4a" --format json -o .\saida\transcript.json --save-json
     ```
   - Linux/Mac:
     ```bash
-    python -m app.cli transcribe ./audios/reuniao.mp3 --format verbose_json -o ./saida/transcript.json --save-json
+    python -m app.cli transcribe "./audios/reuniao.m4a" --format json -o ./saida/transcript.json --save-json
     ```
 
-- Texto simples:
+- Segments/timestamps (verbose_json com Whisper):
   - Windows:
     ```powershell
-    python -m app.cli transcribe .\audios\reuniao.wav -o .\saida\transcript.txt
+    python -m app.cli transcribe ".\audios\reuniao.m4a" -m whisper-1 --format verbose_json -o .\saida\transcript.json --save-json
     ```
   - Linux/Mac:
     ```bash
-    python -m app.cli transcribe ./audios/reuniao.wav -o ./saida/transcript.txt
+    python -m app.cli transcribe "./audios/reuniao.m4a" -m whisper-1 --format verbose_json -o ./saida/transcript.json --save-json
     ```
 
-- Usando Whisper:
+- SRT/VTT (com Whisper):
   - Windows:
     ```powershell
-    python -m app.cli transcribe .\audios\reuniao.mp3 -m whisper-1 -o .\saida\whisper.json --save-json
+    python -m app.cli transcribe ".\audios\reuniao.m4a" -m whisper-1 --format srt -o .\saida\reuniao.srt
     ```
   - Linux/Mac:
     ```bash
-    python -m app.cli transcribe ./audios/reuniao.mp3 -m whisper-1 -o ./saida/whisper.json --save-json
+    python -m app.cli transcribe "./audios/reuniao.m4a" -m whisper-1 --format srt -o ./saida/reuniao.srt
     ```
 
 - Com dica contextual (melhora nomes/termos):
   - Windows:
     ```powershell
-    python -m app.cli transcribe .\audios\reuniao.mp3 `
+    python -m app.cli transcribe ".\audios\reuniao.m4a" `
       --prompt "Participantes: João, Maria; termos: OKR, churn, NPS" `
-      --format verbose_json -o .\saida\transcript.json --save-json
+      --format json -o .\saida\transcript.json --save-json
     ```
   - Linux/Mac:
     ```bash
-    python -m app.cli transcribe ./audios/reuniao.mp3 \
+    python -m app.cli transcribe "./audios/reuniao.m4a" \
       --prompt "Participantes: João, Maria; termos: OKR, churn, NPS" \
-      --format verbose_json -o ./saida/transcript.json --save-json
-    ```
-
-- SRT/VTT (exporta legenda; salve sem --save-json):
-  - Windows:
-    ```powershell
-    python -m app.cli transcribe .\audios\reuniao.mp3 --format srt -o .\saida\reuniao.srt
-    ```
-  - Linux/Mac:
-    ```bash
-    python -m app.cli transcribe ./audios/reuniao.mp3 --format srt -o ./saida/reuniao.srt
+      --format json -o ./saida/transcript.json --save-json
     ```
 
 ### 3) Gerar ata/insights
@@ -182,11 +181,11 @@ Dica: paths com espaços devem ser entre aspas. Ex.: "C:\Meus Áudios\reuniao.mp
 - Diretamente do áudio (transcreve + resume):
   - Windows:
     ```powershell
-    python -m app.cli summarize .\audios\reuniao.mp3 -o .\saida\ata.json
+    python -m app.cli summarize ".\audios\reuniao.m4a" -o .\saida\ata.json
     ```
   - Linux/Mac:
     ```bash
-    python -m app.cli summarize ./audios/reuniao.mp3 -o ./saida/ata.json
+    python -m app.cli summarize "./audios/reuniao.m4a" -o ./saida/ata.json
     ```
 
 - Ajustando modelo/temperatura e contexto:
@@ -209,28 +208,17 @@ Dica: paths com espaços devem ser entre aspas. Ex.: "C:\Meus Áudios\reuniao.mp
 
 - Ativar logs detalhados:
   ```bash
-  python -m app.cli --verbose transcribe ./audios/reuniao.mp3 -o ./saida/transcript.txt
+  python -m app.cli --verbose transcribe "./audios/reuniao.m4a" --format json -o ./saida/transcript.json --save-json
   ```
 
 - Ajustar timeout e tentativas:
   - Windows:
     ```powershell
-    # no .env ou direto no shell
     $env:OPENAI_TIMEOUT="180"; $env:OPENAI_MAX_RETRIES="5"
     ```
   - Linux/Mac:
     ```bash
     export OPENAI_TIMEOUT="180"; export OPENAI_MAX_RETRIES="5"
-    ```
-
-- Conferir variável de ambiente:
-  - Windows:
-    ```powershell
-    echo $env:OPENAI_API_KEY
-    ```
-  - Linux/Mac:
-    ```bash
-    echo $OPENAI_API_KEY
     ```
 
 ---
@@ -241,22 +229,23 @@ Transcreve um arquivo de áudio em pt-BR.
 
 - Forma geral:
   ```bash
-  python -m app.cli transcribe <caminho/arquivo.(mp3|wav)> [opções]
+  python -m app.cli transcribe <caminho/arquivo.(mp3|wav|m4a)> [opções]
   ```
 
 - Argumentos:
-  - `input` (posicional): caminho do arquivo `.mp3` ou `.wav`.
+  - `input` (posicional): caminho do arquivo `.mp3`, `.wav` ou `.m4a`.
   - `-m, --model` (opcional): modelo de transcrição. Padrão: `gpt-4o-transcribe`. Alternativa: `whisper-1`.
   - `-l, --language` (opcional): idioma ISO 639-1. Padrão: `pt`.
   - `-f, --format` (opcional): formato da resposta da API.
-    - `text`, `json`, `verbose_json`, `srt`, `vtt` (sugestão: `verbose_json` para segmentos)
+    - Para `gpt-4o-transcribe`: `text` ou `json`
+    - Para `whisper-1`: `text`, `json`, `verbose_json`, `srt`, `vtt`
   - `--prompt` (opcional): dica contextual (nomes próprios, termos).
   - `-o, --output` (opcional): arquivo de saída (criado).
   - `--save-json` (opcional): salva como JSON do modelo `Transcript`. Sem esta flag, salva texto.
 
 Observações:
 - A extensão do arquivo de saída não altera o comportamento; use `--save-json` para JSON.
-- Para srt/vtt, use `--format srt|vtt` e não passe `--save-json`.
+- Para srt/vtt/verbose_json você deve usar `-m whisper-1`.
 
 ---
 
@@ -266,7 +255,7 @@ Gera ata/insights estruturados a partir de um transcript (JSON/TXT) ou diretamen
 
 - Forma geral:
   ```bash
-  python -m app.cli summarize <caminho/(transcript.json|transcript.txt|audio.mp3|audio.wav)> [opções]
+  python -m app.cli summarize <caminho/(transcript.json|transcript.txt|audio.mp3|audio.wav|audio.m4a)> [opções]
   ```
 
 - Argumentos:
@@ -281,24 +270,6 @@ Saída: JSON do modelo `MeetingSummary`:
 
 ---
 
-## Fluxos comuns
-
-1) Transcrever primeiro e revisar:
-```bash
-python -m app.cli transcribe ./audios/reuniao.mp3 --format verbose_json -o ./saida/transcript.json --save-json
-```
-Depois, gerar ata:
-```bash
-python -m app.cli summarize ./saida/transcript.json -o ./saida/ata.json
-```
-
-2) Fazer tudo de uma vez:
-```bash
-python -m app.cli summarize ./audios/reuniao.mp3 -o ./saida/ata.json
-```
-
----
-
 ## Variáveis de ambiente suportadas
 
 - `OPENAI_API_KEY` (obrigatória): chave da API da OpenAI
@@ -310,10 +281,6 @@ python -m app.cli summarize ./audios/reuniao.mp3 -o ./saida/ata.json
 - `OPENAI_TIMEOUT` (opcional): padrão `120` (segundos)
 - `OPENAI_MAX_RETRIES` (opcional): padrão `3`
 
-Dicas:
-- `.env` é carregado automaticamente; `.env.local` pode sobrescrever chaves do `.env`.
-- Variáveis já definidas no ambiente do sistema têm precedência sobre arquivos.
-
 ---
 
 ## Logs e depuração
@@ -322,31 +289,10 @@ Dicas:
 - Mensagens comuns:
   - Falta de variável: `OPENAI_API_KEY não encontrado`
   - Arquivo não encontrado: caminho incorreto
-  - Formato não suportado: use `.mp3` ou `.wav`
+  - Formato não suportado:
+    - Use `.mp3`, `.wav` ou `.m4a`
+    - Lembre: `verbose_json/srt/vtt` exigem `-m whisper-1`
   - Timeout: aumente `OPENAI_TIMEOUT`
-
----
-
-## Códigos de saída (exit codes)
-
-- `0`: sucesso
-- `1`: falha em tempo de execução (ex.: erro da API, arquivo inválido)
-- `2`: variável `OPENAI_API_KEY` ausente
-
----
-
-## Solução de problemas (Troubleshooting)
-
-- ImportError ao iniciar:
-  - Garanta que existe o arquivo `app/__init__.py` (com dois underscores em cada lado).
-- “Formato de arquivo não suportado”:
-  - Aceitos: `.mp3` e `.wav`. Verifique a extensão.
-- “401/403” da API:
-  - Verifique a chave de API e o projeto correto na OpenAI.
-- “Timeout” ou “network error”:
-  - Aumente `OPENAI_TIMEOUT`, verifique conexão, tente novamente.
-- Salvei `.json` sem `--save-json`:
-  - O formato salvo depende da flag `--save-json` (não da extensão). Use `--save-json` para JSON.
 
 ---
 
