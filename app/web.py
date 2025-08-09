@@ -6,10 +6,12 @@ Interface web intuitiva para transcrição e sumarização de áudios com OpenAI
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 # Adiciona o diretório pai ao path para permitir imports do app
 current_dir = Path(__file__).parent
@@ -127,8 +129,14 @@ def save_uploaded_file(uploaded_file) -> Path:
     return temp_path
 
 
-def display_transcript(transcript: Transcript) -> None:
-    """Exibe a transcrição de forma formatada."""
+def display_transcript(transcript: Transcript, key_suffix: str = "") -> None:
+    """
+    Exibe a transcrição de forma formatada.
+
+    Args:
+        transcript: Objeto Transcript para exibir
+        key_suffix: Sufixo para tornar as keys únicas
+    """
     with st.expander("📝 **Transcrição Completa**", expanded=True):
         # Métricas da transcrição
         col1, col2, col3 = st.columns(3)
@@ -145,7 +153,7 @@ def display_transcript(transcript: Transcript) -> None:
             transcript.text,
             height=300,
             disabled=False,
-            key="transcript_text",
+            key=f"transcript_text_{key_suffix}",
             help="Você pode editar o texto aqui antes de gerar a ata",
         )
 
@@ -162,11 +170,18 @@ def display_transcript(transcript: Transcript) -> None:
                 data=transcript_json,
                 file_name=f"transcript_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
                 mime="application/json",
+                key=f"download_transcript_{key_suffix}",
             )
 
 
-def display_summary(summary: MeetingSummary) -> None:
-    """Exibe o resumo/ata de forma estruturada."""
+def display_summary(summary: MeetingSummary, key_suffix: str = "") -> None:
+    """
+    Exibe o resumo/ata de forma estruturada.
+
+    Args:
+        summary: Objeto MeetingSummary para exibir
+        key_suffix: Sufixo para tornar as keys únicas
+    """
     with st.container():
         st.markdown("### 📊 Ata e Insights Gerados")
 
@@ -208,15 +223,58 @@ def display_summary(summary: MeetingSummary) -> None:
                 for insight in summary.insights:
                     st.info(f"💭 {insight}")
 
-        # Download do resumo
+        # Downloads
         st.divider()
-        summary_json = json.dumps(summary.model_dump(), ensure_ascii=False, indent=2)
-        st.download_button(
-            label="💾 Baixar Ata Completa (JSON)",
-            data=summary_json,
-            file_name=f"ata_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-            mime="application/json",
-        )
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Download JSON
+            summary_json = json.dumps(summary.model_dump(), ensure_ascii=False, indent=2)
+            st.download_button(
+                label="💾 Baixar Ata (JSON)",
+                data=summary_json,
+                file_name=f"ata_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                mime="application/json",
+                key=f"download_summary_json_{key_suffix}",
+            )
+
+        with col2:
+            # Download Markdown (se o método existir)
+            try:
+                markdown_content = summary.to_markdown()
+                st.download_button(
+                    label="📄 Baixar Ata (Markdown)",
+                    data=markdown_content,
+                    file_name=f"ata_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
+                    mime="text/markdown",
+                    key=f"download_summary_md_{key_suffix}",
+                )
+            except AttributeError:
+                # Se o método to_markdown não existir, cria um markdown básico
+                markdown_content = f"""# {summary.title or "Ata da Reunião"}
+
+## Resumo
+{summary.summary}
+
+## Pontos Principais
+{chr(10).join("- " + p for p in summary.key_points)}
+
+## Decisões
+{chr(10).join("- " + d for d in summary.decisions)}
+
+## Ações
+{chr(10).join("- " + a.description for a in summary.action_items)}
+
+## Insights
+{chr(10).join("- " + i for i in summary.insights)}
+"""
+                st.download_button(
+                    label="📄 Baixar Ata (Markdown)",
+                    data=markdown_content,
+                    file_name=f"ata_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
+                    mime="text/markdown",
+                    key=f"download_summary_md_{key_suffix}",
+                )
 
 
 def main():
@@ -265,12 +323,14 @@ def main():
             "Modelo",
             ["gpt-4o-transcribe", "whisper-1"],
             help="gpt-4o-transcribe é mais recente e preciso",
+            key="sidebar_transcribe_model",
         )
 
         language = st.text_input(
             "Idioma (ISO 639-1)",
             value="pt",
             help="Código do idioma (pt para português)",
+            key="sidebar_language",
         )
 
         # Ajusta formatos disponíveis baseado no modelo
@@ -283,6 +343,7 @@ def main():
             "Formato de Resposta",
             format_options,
             help="verbose_json/srt/vtt disponíveis apenas com whisper-1",
+            key="sidebar_response_format",
         )
 
         prompt_hint = st.text_area(
@@ -290,6 +351,7 @@ def main():
             placeholder="Ex: Participantes: João, Maria\nTermos: OKR, NPS",
             help="Ajuda o modelo com nomes próprios e termos técnicos",
             height=100,
+            key="sidebar_prompt_hint",
         )
 
         st.divider()
@@ -300,6 +362,7 @@ def main():
             "Modelo",
             ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"],
             help="gpt-4o-mini é rápido e eficiente",
+            key="sidebar_summary_model",
         )
 
         temperature = st.slider(
@@ -309,6 +372,7 @@ def main():
             value=0.2,
             step=0.1,
             help="Menor = mais focado, Maior = mais criativo",
+            key="sidebar_temperature",
         )
 
         extra_context = st.text_area(
@@ -316,9 +380,19 @@ def main():
             placeholder="Ex: Reunião de produto Q4\nParticipantes: Ana, Bruno",
             help="Informações extras para melhorar o resumo",
             height=100,
+            key="sidebar_extra_context",
         )
 
         st.divider()
+
+        # Botão para limpar sessão
+        if st.button("🗑️ Limpar Sessão", key="clear_session"):
+            for key in ["transcript", "summary", "processing_time", "summary_time"]:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.success("Sessão limpa!")
+            st.rerun()
+
         st.caption("💡 Dica: Use whisper-1 se precisar de timestamps")
 
     # Área principal com tabs
@@ -333,6 +407,7 @@ def main():
             "Selecione um arquivo de áudio",
             type=["mp3", "wav", "m4a"],
             help="Formatos suportados: MP3, WAV, M4A (máx. 25MB)",
+            key="audio_uploader",
         )
 
         if uploaded_file is not None:
@@ -348,7 +423,7 @@ def main():
                 st.metric("Formato", file_ext)
 
             # Botão de transcrição
-            if st.button("🚀 Iniciar Transcrição", type="primary", use_container_width=True):
+            if st.button("🚀 Iniciar Transcrição", type="primary", use_container_width=True, key="start_transcription"):
                 with st.spinner("Transcrevendo áudio... Isso pode levar alguns minutos."):
                     try:
                         # Salva arquivo temporariamente
@@ -378,17 +453,17 @@ def main():
                         st.success(f"✅ Transcrição concluída em {format_time_duration(processing_time)}!")
 
                         # Exibe transcrição
-                        display_transcript(transcript)
+                        display_transcript(transcript, key_suffix="tab1_new")
 
                     except Exception as e:
-                        st.error(f"❌ Erro na transcrição: {e!s}")
-                        if st.checkbox("Mostrar detalhes do erro"):
+                        st.error(f"❌ Erro na transcrição: {str(e)}")
+                        if st.checkbox("Mostrar detalhes do erro", key="error_details_transcription"):
                             st.exception(e)
 
         # Se já existe transcrição na sessão, mostra
         elif "transcript" in st.session_state:
             st.info("ℹ️ Transcrição anterior disponível")
-            display_transcript(st.session_state["transcript"])
+            display_transcript(st.session_state["transcript"], key_suffix="tab1_existing")
 
     with tab2:
         st.markdown("### Geração de Ata e Insights")
@@ -410,7 +485,7 @@ def main():
                 st.text(preview_text)
 
             # Botão para gerar resumo
-            if st.button("🎯 Gerar Ata e Insights", type="primary", use_container_width=True):
+            if st.button("🎯 Gerar Ata e Insights", type="primary", use_container_width=True, key="generate_summary"):
                 with st.spinner("Analisando transcrição e gerando insights..."):
                     try:
                         start_time = datetime.now()
@@ -429,17 +504,18 @@ def main():
                         st.success(f"✅ Ata gerada em {format_time_duration(processing_time)}!")
 
                         # Exibe resumo
-                        display_summary(summary)
+                        display_summary(summary, key_suffix="tab2_new")
 
                     except Exception as e:
-                        st.error(f"❌ Erro ao gerar ata: {e!s}")
-                        if st.checkbox("Mostrar detalhes do erro", key="error_summary"):
+                        st.error(f"❌ Erro ao gerar ata: {str(e)}")
+                        if st.checkbox("Mostrar detalhes do erro", key="error_details_summary"):
                             st.exception(e)
 
             # Se já existe resumo na sessão, mostra
-            if "summary" in st.session_state:
+            if "summary" in st.session_state and st.session_state.get("summary"):
                 st.divider()
-                display_summary(st.session_state["summary"])
+                st.info("ℹ️ Última ata gerada:")
+                display_summary(st.session_state["summary"], key_suffix="tab2_existing")
 
     with tab3:
         st.markdown("### 📚 Ajuda e Documentação")
@@ -455,7 +531,7 @@ def main():
                 2. **Faça upload** de um arquivo de áudio
                 3. **Transcreva** o áudio para texto
                 4. **Gere a ata** com insights estruturados
-                5. **Baixe** os resultados em JSON
+                5. **Baixe** os resultados em JSON ou Markdown
                 
                 #### 📝 Formatos Suportados
                 
@@ -497,6 +573,7 @@ def main():
                 - Use **dicas contextuais** para melhorar nomes próprios
                 - **Temperatura baixa** (0.2) para resumos objetivos
                 - **whisper-1** se precisar de timestamps
+                - **Limpe a sessão** se quiser começar do zero
                 
                 #### 🔧 Solução de Problemas
                 
@@ -531,7 +608,7 @@ def main():
                         f"{len(st.session_state['transcript'].text):,}",
                     )
 
-            if "summary" in st.session_state:
+            if "summary" in st.session_state and st.session_state.get("summary"):
                 with col3:
                     st.metric(
                         "Ata",
