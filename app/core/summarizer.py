@@ -86,14 +86,10 @@ def summarize_transcript(
                 text_out = ""
                 for item in rd.get("output", []):
                     for c in item.get("content", []):
-                        if c.get("type") in ("output_text", "text") and isinstance(
-                            c.get("text"), str
-                        ):
+                        if c.get("type") in ("output_text", "text") and isinstance(c.get("text"), str):
                             text_out += c["text"]
                 if not text_out:
-                    raise ValueError(
-                        "Não foi possível extrair texto de saída do modelo."
-                    )
+                    raise ValueError("Não foi possível extrair texto de saída do modelo.")
             parsed = json.loads(text_out)
         except Exception as e:
             logger.error(f"Falha ao interpretar JSON do resumo: {e}")
@@ -104,9 +100,7 @@ def summarize_transcript(
     except Exception as e:
         logger.error(f"Falha ao validar MeetingSummary: {e}")
         # Loga o JSON para depuração
-        logger.debug(
-            f"JSON recebido para validação: {json.dumps(parsed, ensure_ascii=False)[:2000]}"
-        )
+        logger.debug(f"JSON recebido para validação: {json.dumps(parsed, ensure_ascii=False)[:2000]}")
         raise
 
     logger.info("Ata/insights gerados com sucesso")

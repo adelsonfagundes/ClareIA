@@ -50,25 +50,19 @@ class Settings(BaseModel):
 
     # OpenAI
     openai_api_key: str = Field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
-    openai_timeout: float = Field(
-        default_factory=lambda: float(os.getenv("OPENAI_TIMEOUT", "120"))
-    )
-    openai_max_retries: int = Field(
-        default_factory=lambda: int(os.getenv("OPENAI_MAX_RETRIES", "3"))
-    )
+    openai_timeout: float = Field(default_factory=lambda: float(os.getenv("OPENAI_TIMEOUT", "120")))
+    openai_max_retries: int = Field(default_factory=lambda: int(os.getenv("OPENAI_MAX_RETRIES", "3")))
 
     # Transcrição
     default_transcribe_model: str = os.getenv("TRANSCRIBE_MODEL", "gpt-4o-transcribe")
     default_language: str = os.getenv("TRANSCRIBE_LANGUAGE", "pt")
-    default_response_format: Literal["text", "json", "verbose_json", "srt", "vtt"] = (
-        os.getenv("TRANSCRIBE_FORMAT", "json")
+    default_response_format: Literal["text", "json", "verbose_json", "srt", "vtt"] = os.getenv(
+        "TRANSCRIBE_FORMAT", "json"
     )  # type: ignore[assignment]
 
     # Summarizer
     summary_model: str = os.getenv("SUMMARY_MODEL", "gpt-4o-mini")
-    summary_temperature: float = Field(
-        default_factory=lambda: float(os.getenv("SUMMARY_TEMPERATURE", "0.2"))
-    )
+    summary_temperature: float = Field(default_factory=lambda: float(os.getenv("SUMMARY_TEMPERATURE", "0.2")))
 
 
 _settings_singleton: Settings | None = None

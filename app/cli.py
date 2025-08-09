@@ -101,16 +101,12 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         formatter_class=argparse.RawTextHelpFormatter,
     )
-    parser.add_argument(
-        "--verbose", action="store_true", help="Ativa logs em nível DEBUG"
-    )
+    parser.add_argument("--verbose", action="store_true", help="Ativa logs em nível DEBUG")
 
     sub = parser.add_subparsers(dest="command", required=True)
 
     # Subcomando: transcribe
-    p_tr = sub.add_parser(
-        "transcribe", help="Transcreve um arquivo de áudio (mp3/wav/m4a)"
-    )
+    p_tr = sub.add_parser("transcribe", help="Transcreve um arquivo de áudio (mp3/wav/m4a)")
     p_tr.add_argument("input", help="Caminho para o arquivo .mp3, .wav ou .m4a")
     p_tr.add_argument(
         "-m",
@@ -157,9 +153,7 @@ def build_parser() -> argparse.ArgumentParser:
         "input",
         help="Caminho do transcript (.json/.txt) ou do arquivo de áudio (.mp3/.wav/.m4a)",
     )
-    p_sm.add_argument(
-        "-m", "--model", default=None, help="Modelo para resumo (ex: gpt-4o-mini)"
-    )
+    p_sm.add_argument("-m", "--model", default=None, help="Modelo para resumo (ex: gpt-4o-mini)")
     p_sm.add_argument(
         "-t",
         "--temperature",
