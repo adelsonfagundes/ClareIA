@@ -8,7 +8,7 @@ from typing import Optional
 
 from colorama import Fore, Style, init as colorama_init
 
-from app import __version__
+from app import __version__ as APP_VERSION
 from app.core.config import get_settings
 from app.core.logging import setup_logging
 from app.core.summarizer import summarize_transcript
@@ -20,7 +20,7 @@ colorama_init(autoreset=True)
 
 
 def _print_header():
-    print(f"{Fore.CYAN}Transcriber & Summarizer CLI{Style.RESET_ALL} v{__version__}")
+    print(f"{Fore.CYAN}Transcriber & Summarizer CLI{Style.RESET_ALL} v{APP_VERSION}")
 
 
 def cmd_transcribe(args: argparse.Namespace) -> int:
