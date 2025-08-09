@@ -6,25 +6,40 @@ Interface web intuitiva para transcrição e sumarização de áudios com OpenAI
 from __future__ import annotations
 
 import json
-import os
+import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+
+# Adiciona o diretório pai ao path para permitir imports do app
+current_dir = Path(__file__).parent
+parent_dir = current_dir.parent
+if str(parent_dir) not in sys.path:
+    sys.path.insert(0, str(parent_dir))
 
 import streamlit as st
-from streamlit_extras.colored_header import colored_header
-from streamlit_extras.metric_cards import style_metric_cards
 
-from app import __version__ as APP_VERSION
-from app.core.config import get_settings
-from app.core.summarizer import summarize_transcript
-from app.core.transcriber import transcribe_file
-from app.models.summary import MeetingSummary
-from app.models.transcript import Transcript
+# Importações do ClareIA
+try:
+    from app import __version__ as APP_VERSION
+    from app.core.config import get_settings
+    from app.core.summarizer import summarize_transcript
+    from app.core.transcriber import transcribe_file
+    from app.models.summary import MeetingSummary
+    from app.models.transcript import Transcript
+except ImportError:
+    # Fallback para quando executado diretamente
+    import __init__ as app_init
+    from core.config import get_settings
+    from core.summarizer import summarize_transcript
+    from core.transcriber import transcribe_file
+    from models.summary import MeetingSummary
+    from models.transcript import Transcript
+
+    APP_VERSION = getattr(app_init, "__version__", "0.1.0")
 
 
-# Configuração da página
+# Configuração da página (deve ser a primeira chamada Streamlit)
 st.set_page_config(
     page_title="ClareIA - Transcriber & Summarizer",
     page_icon="🎙️",
@@ -67,6 +82,14 @@ st.markdown(
     div[data-testid="stMetricValue"] {
         font-size: 1.5rem;
     }
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 24px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        padding-left: 20px;
+        padding-right: 20px;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -93,7 +116,11 @@ def save_uploaded_file(uploaded_file) -> Path:
     temp_dir = Path(tempfile.gettempdir()) / "clareia_uploads"
     temp_dir.mkdir(exist_ok=True)
 
-    temp_path = temp_dir / uploaded_file.name
+    # Usa timestamp para evitar conflitos
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    file_ext = Path(uploaded_file.name).suffix
+    temp_path = temp_dir / f"audio_{timestamp}{file_ext}"
+
     with open(temp_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
 
@@ -119,13 +146,13 @@ def display_transcript(transcript: Transcript) -> None:
             height=300,
             disabled=False,
             key="transcript_text",
+            help="Você pode editar o texto aqui antes de gerar a ata",
         )
 
         # Botões de ação
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("📋 Copiar para Clipboard", key="copy_transcript"):
-                st.write("Use Ctrl+A e Ctrl+C na caixa de texto acima")
+            st.info("💡 Use Ctrl+A para selecionar todo o texto")
 
         with col2:
             # Download como JSON
@@ -141,17 +168,13 @@ def display_transcript(transcript: Transcript) -> None:
 def display_summary(summary: MeetingSummary) -> None:
     """Exibe o resumo/ata de forma estruturada."""
     with st.container():
-        colored_header(
-            label="📊 Ata e Insights",
-            description="Resumo estruturado da transcrição",
-            color_name="blue-70",
-        )
+        st.markdown("### 📊 Ata e Insights Gerados")
 
         # Título e resumo
         if summary.title:
             st.subheader(f"📌 {summary.title}")
 
-        st.write("### 📝 Resumo Executivo")
+        st.markdown("#### 📝 Resumo Executivo")
         st.info(summary.summary)
 
         # Layout em duas colunas
@@ -160,28 +183,28 @@ def display_summary(summary: MeetingSummary) -> None:
         with col1:
             # Pontos principais
             if summary.key_points:
-                st.write("### 🎯 Pontos Principais")
+                st.markdown("#### 🎯 Pontos Principais")
                 for point in summary.key_points:
                     st.write(f"• {point}")
 
             # Decisões
             if summary.decisions:
-                st.write("### ✅ Decisões Tomadas")
+                st.markdown("#### ✅ Decisões Tomadas")
                 for decision in summary.decisions:
                     st.success(f"📍 {decision}")
 
         with col2:
             # Itens de ação
             if summary.action_items:
-                st.write("### 📋 Itens de Ação")
+                st.markdown("#### 📋 Itens de Ação")
                 for item in summary.action_items:
-                    owner = f" ({item.owner})" if item.owner else ""
+                    owner = f" **({item.owner})**" if item.owner else ""
                     due = f" - até {item.due_date}" if item.due_date else ""
                     st.warning(f"⚡ {item.description}{owner}{due}")
 
             # Insights
             if summary.insights:
-                st.write("### 💡 Insights")
+                st.markdown("#### 💡 Insights")
                 for insight in summary.insights:
                     st.info(f"💭 {insight}")
 
@@ -196,7 +219,7 @@ def display_summary(summary: MeetingSummary) -> None:
         )
 
 
-def main_interface():
+def main():
     """Interface principal do Streamlit."""
     # Header
     st.title("🎙️ ClareIA - Transcriber & Summarizer")
@@ -209,6 +232,27 @@ def main_interface():
             "Configure a variável de ambiente ou crie um arquivo `.env` com:\n"
             "```\nOPENAI_API_KEY=sua_chave_aqui\n```"
         )
+
+        with st.expander("📚 Como configurar a API Key"):
+            st.markdown("""
+            ### Opção 1: Arquivo .env (Recomendado)
+            1. Copie o arquivo `.env.example` para `.env`
+            2. Edite o arquivo e adicione sua chave:
+               ```
+               OPENAI_API_KEY=sk-...
+               ```
+            3. Reinicie a aplicação
+            
+            ### Opção 2: Variável de Ambiente
+            - **Windows (PowerShell):**
+              ```powershell
+              $env:OPENAI_API_KEY="sk-..."
+              ```
+            - **Linux/Mac:**
+              ```bash
+              export OPENAI_API_KEY="sk-..."
+              ```
+            """)
         st.stop()
 
     # Sidebar com configurações
@@ -229,23 +273,23 @@ def main_interface():
             help="Código do idioma (pt para português)",
         )
 
+        # Ajusta formatos disponíveis baseado no modelo
+        if transcribe_model == "gpt-4o-transcribe":
+            format_options = ["json", "text"]
+        else:
+            format_options = ["json", "text", "verbose_json", "srt", "vtt"]
+
         response_format = st.selectbox(
             "Formato de Resposta",
-            ["json", "text", "verbose_json", "srt", "vtt"],
-            help="verbose_json/srt/vtt requerem whisper-1",
+            format_options,
+            help="verbose_json/srt/vtt disponíveis apenas com whisper-1",
         )
-
-        # Validação de compatibilidade
-        if transcribe_model == "gpt-4o-transcribe" and response_format not in [
-            "json",
-            "text",
-        ]:
-            st.warning(f"⚠️ {transcribe_model} só suporta json/text")
 
         prompt_hint = st.text_area(
             "Dica Contextual (opcional)",
             placeholder="Ex: Participantes: João, Maria\nTermos: OKR, NPS",
             help="Ajuda o modelo com nomes próprios e termos técnicos",
+            height=100,
         )
 
         st.divider()
@@ -271,20 +315,18 @@ def main_interface():
             "Contexto Adicional (opcional)",
             placeholder="Ex: Reunião de produto Q4\nParticipantes: Ana, Bruno",
             help="Informações extras para melhorar o resumo",
+            height=100,
         )
 
         st.divider()
         st.caption("💡 Dica: Use whisper-1 se precisar de timestamps")
 
-    # Área principal
+    # Área principal com tabs
     tab1, tab2, tab3 = st.tabs(["📤 Upload & Transcrição", "📊 Análise & Ata", "📚 Ajuda"])
 
     with tab1:
-        colored_header(
-            label="Transcrição de Áudio",
-            description="Faça upload de um arquivo de áudio para transcrever",
-            color_name="blue-70",
-        )
+        st.markdown("### Transcrição de Áudio")
+        st.markdown("Faça upload de um arquivo de áudio para transcrever")
 
         # Upload de arquivo
         uploaded_file = st.file_uploader(
@@ -328,7 +370,10 @@ def main_interface():
                         st.session_state["processing_time"] = processing_time
 
                         # Remove arquivo temporário
-                        temp_path.unlink(missing_ok=True)
+                        try:
+                            temp_path.unlink(missing_ok=True)
+                        except:
+                            pass  # Ignora erros ao deletar temporário
 
                         st.success(f"✅ Transcrição concluída em {format_time_duration(processing_time)}!")
 
@@ -336,7 +381,9 @@ def main_interface():
                         display_transcript(transcript)
 
                     except Exception as e:
-                        st.error(f"❌ Erro na transcrição: {str(e)}")
+                        st.error(f"❌ Erro na transcrição: {e!s}")
+                        if st.checkbox("Mostrar detalhes do erro"):
+                            st.exception(e)
 
         # Se já existe transcrição na sessão, mostra
         elif "transcript" in st.session_state:
@@ -344,11 +391,8 @@ def main_interface():
             display_transcript(st.session_state["transcript"])
 
     with tab2:
-        colored_header(
-            label="Geração de Ata e Insights",
-            description="Analise a transcrição e gere uma ata estruturada",
-            color_name="green-70",
-        )
+        st.markdown("### Geração de Ata e Insights")
+        st.markdown("Analise a transcrição e gere uma ata estruturada")
 
         if "transcript" not in st.session_state:
             st.warning(
@@ -360,7 +404,10 @@ def main_interface():
 
             # Preview da transcrição
             with st.expander("📝 Preview da Transcrição", expanded=False):
-                st.text(transcript.text[:1000] + ("..." if len(transcript.text) > 1000 else ""))
+                preview_text = transcript.text[:1000]
+                if len(transcript.text) > 1000:
+                    preview_text += "..."
+                st.text(preview_text)
 
             # Botão para gerar resumo
             if st.button("🎯 Gerar Ata e Insights", type="primary", use_container_width=True):
@@ -385,7 +432,9 @@ def main_interface():
                         display_summary(summary)
 
                     except Exception as e:
-                        st.error(f"❌ Erro ao gerar ata: {str(e)}")
+                        st.error(f"❌ Erro ao gerar ata: {e!s}")
+                        if st.checkbox("Mostrar detalhes do erro", key="error_summary"):
+                            st.exception(e)
 
             # Se já existe resumo na sessão, mostra
             if "summary" in st.session_state:
@@ -393,18 +442,14 @@ def main_interface():
                 display_summary(st.session_state["summary"])
 
     with tab3:
-        colored_header(
-            label="Ajuda e Documentação",
-            description="Como usar o ClareIA",
-            color_name="violet-70",
-        )
+        st.markdown("### 📚 Ajuda e Documentação")
 
         col1, col2 = st.columns(2)
 
         with col1:
             st.markdown(
                 """
-                ### 🎯 Como Usar
+                #### 🎯 Como Usar
                 
                 1. **Configure as opções** no painel lateral
                 2. **Faça upload** de um arquivo de áudio
@@ -412,7 +457,7 @@ def main_interface():
                 4. **Gere a ata** com insights estruturados
                 5. **Baixe** os resultados em JSON
                 
-                ### 📝 Formatos Suportados
+                #### 📝 Formatos Suportados
                 
                 **Áudio:**
                 - MP3 (recomendado)
@@ -420,13 +465,23 @@ def main_interface():
                 - M4A
                 
                 **Tamanho máximo:** 25MB
+                
+                #### 🚀 Executando a Aplicação
+                
+                ```bash
+                # Opção 1 - Script auxiliar
+                python run_web.py
+                
+                # Opção 2 - Comando direto
+                streamlit run app/web.py
+                ```
                 """
             )
 
         with col2:
             st.markdown(
                 """
-                ### 🤖 Modelos Disponíveis
+                #### 🤖 Modelos Disponíveis
                 
                 **Transcrição:**
                 - `gpt-4o-transcribe`: Mais recente e preciso
@@ -437,11 +492,21 @@ def main_interface():
                 - `gpt-4o`: Mais capaz
                 - `gpt-3.5-turbo`: Alternativa econômica
                 
-                ### 💡 Dicas
+                #### 💡 Dicas
                 
-                - Use **dicas contextuais** para melhorar a precisão com nomes próprios
-                - **Temperatura baixa** (0.2) para resumos mais objetivos
+                - Use **dicas contextuais** para melhorar nomes próprios
+                - **Temperatura baixa** (0.2) para resumos objetivos
                 - **whisper-1** se precisar de timestamps
+                
+                #### 🔧 Solução de Problemas
+                
+                **API Key não encontrada:**
+                - Verifique o arquivo `.env`
+                - Reinicie a aplicação após configurar
+                
+                **Erro de transcrição:**
+                - Verifique o formato do arquivo
+                - Confirme que o arquivo tem menos de 25MB
                 """
             )
 
@@ -449,7 +514,7 @@ def main_interface():
 
         # Estatísticas da sessão
         if "transcript" in st.session_state or "summary" in st.session_state:
-            st.subheader("📊 Estatísticas da Sessão")
+            st.markdown("#### 📊 Estatísticas da Sessão")
 
             col1, col2, col3, col4 = st.columns(4)
 
@@ -480,13 +545,13 @@ def main_interface():
 
         # Footer
         st.divider()
-        st.caption(f"ClareIA v{APP_VERSION} | Desenvolvido com ❤️ usando Python {st.python_version} e Streamlit")
+        st.caption(
+            f"ClareIA v{APP_VERSION} | "
+            "Desenvolvido com ❤️ usando Python e Streamlit | "
+            "[GitHub](https://github.com/adelsonfagundes/ClareIA)"
+        )
 
 
-def run():
-    """Função principal para executar a aplicação."""
-    main_interface()
-
-
+# Executa a aplicação
 if __name__ == "__main__":
-    run()
+    main()

@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 # - .env é carregado sem sobrescrever variáveis já definidas no ambiente
 # - .env.local (se existir) pode sobrescrever valores do .env
 try:
-    from dotenv import load_dotenv, find_dotenv
+    from dotenv import find_dotenv, load_dotenv
 except Exception:
     load_dotenv = None
     find_dotenv = None

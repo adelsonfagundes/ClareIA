@@ -4,9 +4,9 @@ import argparse
 import json
 import os
 import sys
-from typing import Optional
 
-from colorama import Fore, Style, init as colorama_init
+from colorama import Fore, Style
+from colorama import init as colorama_init
 
 from app import __version__ as APP_VERSION
 from app.core.config import get_settings
@@ -53,16 +53,15 @@ def _load_transcript_from_path(path: str) -> Transcript:
         raise FileNotFoundError(path)
     ext = os.path.splitext(path)[1].lower()
     if ext in {".json"}:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
         return Transcript.model_validate(data)
-    elif ext in {".txt"}:
-        with open(path, "r", encoding="utf-8") as f:
+    if ext in {".txt"}:
+        with open(path, encoding="utf-8") as f:
             text = f.read()
         return Transcript(text=text, language="pt", segments=None, source_path=path)
-    else:
-        # Se for áudio (.mp3/.wav/.m4a), vamos transcrever primeiro
-        return transcribe_file(path)
+    # Se for áudio (.mp3/.wav/.m4a), vamos transcrever primeiro
+    return transcribe_file(path)
 
 
 def cmd_summarize(args: argparse.Namespace) -> int:
@@ -178,7 +177,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 

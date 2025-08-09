@@ -4,7 +4,7 @@ import json
 import logging
 import mimetypes
 import os
-from typing import Literal, Optional
+from typing import Literal
 
 from app.core.config import get_settings
 from app.models.transcript import Transcript
@@ -73,22 +73,21 @@ def _validate_model_and_format(model: str, response_format: SupportedResponseFor
                 f"O formato '{response_format}' não é suportado por '{model}'. "
                 "Use um dos: text, json, verbose_json, srt, vtt."
             )
-    else:
-        # Desconhecido: permitir apenas text/json para segurança
-        if response_format not in {"json", "text"}:
-            raise ValueError(
-                f"O formato '{response_format}' pode não ser suportado por '{model}'. "
-                "Use 'json' ou 'text', ou escolha '-m whisper-1' para formatos avançados."
-            )
+    # Desconhecido: permitir apenas text/json para segurança
+    elif response_format not in {"json", "text"}:
+        raise ValueError(
+            f"O formato '{response_format}' pode não ser suportado por '{model}'. "
+            "Use 'json' ou 'text', ou escolha '-m whisper-1' para formatos avançados."
+        )
 
 
 def transcribe_file(
     file_path: str,
     *,
-    model: Optional[str] = None,
-    language: Optional[str] = None,
+    model: str | None = None,
+    language: str | None = None,
     response_format: SupportedResponseFormat | None = None,
-    prompt: Optional[str] = None,
+    prompt: str | None = None,
 ) -> Transcript:
     """
     Transcreve arquivo de áudio usando OpenAI.

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Optional
 
 from app.core.config import get_settings
 from app.models.summary import MeetingSummary
@@ -15,9 +14,9 @@ logger = logging.getLogger(__name__)
 def summarize_transcript(
     transcript: Transcript | str,
     *,
-    model: Optional[str] = None,
-    temperature: Optional[float] = None,
-    extra_context: Optional[str] = None,
+    model: str | None = None,
+    temperature: float | None = None,
+    extra_context: str | None = None,
 ) -> MeetingSummary:
     """
     Gera ata/insights estruturados a partir do transcript usando o Responses API.
