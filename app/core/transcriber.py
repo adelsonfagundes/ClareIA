@@ -12,7 +12,22 @@ from app.services.openai_client import get_openai_client
 
 logger = logging.getLogger(__name__)
 
+# Garante mapeamentos comuns para reconhecimento do tipo
+mimetypes.add_type("audio/mp4", ".m4a")
+mimetypes.add_type("audio/mpeg", ".mp3")
+mimetypes.add_type("audio/wav", ".wav")
+
 SupportedResponseFormat = Literal["text", "json", "verbose_json", "srt", "vtt"]
+
+SUPPORTED_EXTS = {".mp3", ".wav", ".m4a"}
+SUPPORTED_MIMES = {
+    "audio/mpeg",
+    "audio/wav",
+    "audio/x-wav",
+    "audio/mp4",
+    "audio/x-m4a",
+    "video/mp4",  # alguns sistemas identificam m4a como video/mp4
+}
 
 
 def _detect_mime(file_path: str) -> str:
@@ -23,13 +38,13 @@ def _detect_mime(file_path: str) -> str:
 def _ensure_audio(file_path: str) -> None:
     if not os.path.isfile(file_path):
         raise FileNotFoundError(f"Arquivo não encontrado: {file_path}")
+    ext = os.path.splitext(file_path)[1].lower()
     mime = _detect_mime(file_path)
-    if not (mime.endswith("/mpeg") or mime.endswith("/wav") or mime == "audio/x-wav"):
-        # Aceitamos mp3 (audio/mpeg) e wav (audio/wav, audio/x-wav)
-        # Alguns sistemas podem não detectar corretamente; validamos também por extensão
-        ext = os.path.splitext(file_path)[1].lower()
-        if ext not in {".mp3", ".wav"}:
-            raise ValueError(f"Formato de arquivo não suportado: {mime} ({file_path})")
+    if ext in SUPPORTED_EXTS or mime in SUPPORTED_MIMES:
+        return
+    raise ValueError(
+        f"Formato de arquivo não suportado: {mime or ext} ({file_path}). Use .mp3, .wav ou .m4a."
+    )
 
 
 def transcribe_file(
@@ -44,7 +59,7 @@ def transcribe_file(
     Transcreve arquivo de áudio usando OpenAI.
 
     Args:
-        file_path: caminho do .mp3 ou .wav
+        file_path: caminho do .mp3, .wav ou .m4a
         model: modelo de transcrição (gpt-4o-transcribe ou whisper-1)
         language: ISO 639-1 (ex: 'pt')
         response_format: 'text' | 'json' | 'verbose_json' | 'srt' | 'vtt'

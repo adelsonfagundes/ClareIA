@@ -61,14 +61,14 @@ def _load_transcript_from_path(path: str) -> Transcript:
             text = f.read()
         return Transcript(text=text, language="pt", segments=None, source_path=path)
     else:
-        # Se for áudio, vamos transcrever primeiro
+        # Se for áudio (.mp3/.wav/.m4a), vamos transcrever primeiro
         return transcribe_file(path)
 
 
 def cmd_summarize(args: argparse.Namespace) -> int:
     settings = get_settings()
 
-    # Se input for .mp3/.wav, transcreve antes
+    # Se input for áudio, transcreve antes
     transcript = _load_transcript_from_path(args.input)
 
     summary = summarize_transcript(
@@ -102,8 +102,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     # Subcomando: transcribe
-    p_tr = sub.add_parser("transcribe", help="Transcreve um arquivo de áudio (mp3/wav)")
-    p_tr.add_argument("input", help="Caminho para o arquivo .mp3 ou .wav")
+    p_tr = sub.add_parser(
+        "transcribe", help="Transcreve um arquivo de áudio (mp3/wav/m4a)"
+    )
+    p_tr.add_argument("input", help="Caminho para o arquivo .mp3, .wav ou .m4a")
     p_tr.add_argument(
         "-m",
         "--model",
@@ -139,11 +141,11 @@ def build_parser() -> argparse.ArgumentParser:
     # Subcomando: summarize
     p_sm = sub.add_parser(
         "summarize",
-        help="Gera ata/insights a partir de um transcript (json/txt) ou de um áudio (transcreve e resume).",
+        help="Gera ata/insights a partir de um transcript (json/txt) ou de um áudio (.mp3/.wav/.m4a, transcreve e resume).",
     )
     p_sm.add_argument(
         "input",
-        help="Caminho do transcript (.json/.txt) ou do arquivo de áudio (.mp3/.wav)",
+        help="Caminho do transcript (.json/.txt) ou do arquivo de áudio (.mp3/.wav/.m4a)",
     )
     p_sm.add_argument(
         "-m", "--model", default=None, help="Modelo para resumo (ex: gpt-4o-mini)"
