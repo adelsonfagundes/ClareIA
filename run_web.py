@@ -1,22 +1,17 @@
 #!/usr/bin/env python3
-"""
-Script de inicialização da interface web do ClareIA.
-Executa diretamente o Streamlit com a aplicação.
-"""
+"""Script de inicialização da interface web do ClareIA."""
 
 import subprocess
 import sys
 from pathlib import Path
 
 
-def main():
+def main() -> int:
     """Executa o Streamlit com a aplicação web."""
-    # Caminho para o arquivo web.py
     web_app = Path(__file__).parent / "app" / "web.py"
 
-    # Comando para executar o Streamlit
     cmd = [
-        sys.executable,  # Python atual
+        sys.executable,
         "-m",
         "streamlit",
         "run",
@@ -26,20 +21,16 @@ def main():
         "--browser.gatherUsageStats=false",
     ]
 
-    print("🚀 Iniciando ClareIA Web Interface...")
-    print("📍 Acesse em: http://localhost:8501")
-    print("⏹️  Pressione Ctrl+C para parar\n")
-
     try:
-        # Executa o Streamlit como subprocess
-        result = subprocess.run(cmd, check=False)
-        return result.returncode
+        result = subprocess.run(cmd, check=True)  # noqa: S603
+    except subprocess.CalledProcessError as e:
+        return e.returncode
     except KeyboardInterrupt:
-        print("\n👋 Encerrando ClareIA...")
         return 0
-    except Exception as e:
-        print(f"❌ Erro ao iniciar: {e}")
+    except Exception:
         return 1
+    else:
+        return result.returncode
 
 
 if __name__ == "__main__":

@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
+from pathlib import Path
 
-from colorama import Fore, Style
 from colorama import init as colorama_init
 
-from app import __version__ as APP_VERSION
 from app.core.config import get_settings
 from app.core.logging import setup_logging
 from app.core.summarizer import summarize_transcript
@@ -19,8 +17,8 @@ from app.models.transcript import Transcript
 colorama_init(autoreset=True)
 
 
-def _print_header():
-    print(f"{Fore.CYAN}Transcriber & Summarizer CLI{Style.RESET_ALL} v{APP_VERSION}")
+def _print_header() -> None:
+    pass
 
 
 def cmd_transcribe(args: argparse.Namespace) -> int:
@@ -33,7 +31,7 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
         args.input,
         model=model,
         language=language,
-        response_format=response_format,  # 'json' ou 'verbose_json' (se whisper-1)
+        response_format=response_format,
         prompt=args.prompt,
     )
 
@@ -41,25 +39,28 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
         out_fmt = "json" if args.save_json else "txt"
         save_transcript(transcript, args.output, as_format=out_fmt)
     else:
-        # Se não informaram saída, imprime preview no stdout
-        print(f"{Fore.GREEN}Transcrição:{Style.RESET_ALL}\n")
-        print(transcript.text[:4000] + ("..." if len(transcript.text) > 4000 else ""))
+        pass
 
     return 0
 
 
 def _load_transcript_from_path(path: str) -> Transcript:
-    if not os.path.exists(path):
+    path_obj = Path(path)
+    if not path_obj.exists():
         raise FileNotFoundError(path)
-    ext = os.path.splitext(path)[1].lower()
+
+    ext = path_obj.suffix.lower()
+
     if ext in {".json"}:
-        with open(path, encoding="utf-8") as f:
+        with path_obj.open(encoding="utf-8") as f:
             data = json.load(f)
         return Transcript.model_validate(data)
+
     if ext in {".txt"}:
-        with open(path, encoding="utf-8") as f:
+        with path_obj.open(encoding="utf-8") as f:
             text = f.read()
         return Transcript(text=text, language="pt", segments=None, source_path=path)
+
     # Se for áudio (.mp3/.wav/.m4a), vamos transcrever primeiro
     return transcribe_file(path)
 
@@ -78,13 +79,13 @@ def cmd_summarize(args: argparse.Namespace) -> int:
     )
 
     if args.output:
-        os.makedirs(os.path.dirname(os.path.abspath(args.output)) or ".", exist_ok=True)
-        with open(args.output, "w", encoding="utf-8") as f:
+        output_path = Path(args.output).resolve()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with output_path.open("w", encoding="utf-8") as f:
             json.dump(summary.model_dump(), f, ensure_ascii=False, indent=2)
-        print(f"{Fore.GREEN}Ata/insights salvos em{Style.RESET_ALL} {args.output}")
     else:
-        print(f"{Fore.MAGENTA}Ata/Insights:{Style.RESET_ALL}\n")
-        print(json.dumps(summary.model_dump(), ensure_ascii=False, indent=2))
+        pass
 
     return 0
 
@@ -104,7 +105,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub = parser.add_subparsers(dest="command", required=True)
 
-    # Subcomando: transcribe
     p_tr = sub.add_parser("transcribe", help="Transcreve um arquivo de áudio (mp3/wav/m4a)")
     p_tr.add_argument("input", help="Caminho para o arquivo .mp3, .wav ou .m4a")
     p_tr.add_argument(
@@ -143,10 +143,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_tr.set_defaults(func=cmd_transcribe)
 
-    # Subcomando: summarize
     p_sm = sub.add_parser(
         "summarize",
-        help="Gera ata/insights a partir de um transcript (json/txt) ou de um áudio (.mp3/.wav/.m4a, transcreve e resume).",
+        help=(
+            "Gera ata/insights a partir de um transcript (json/txt) ou de um áudio "
+            "(.mp3/.wav/.m4a, transcreve e resume)."
+        ),
     )
     p_sm.add_argument(
         "input",
@@ -184,17 +186,12 @@ def main(argv: list[str] | None = None) -> int:
     setup_logging(verbose=args.verbose)
     _print_header()
 
-    if not os.getenv("OPENAI_API_KEY"):
-        print(
-            f"{Fore.RED}Erro:{Style.RESET_ALL} OPENAI_API_KEY não encontrado. "
-            "Defina a variável de ambiente ou preencha o .env (se utilizar)."
-        )
+    if not Path.home().joinpath(".env").exists():
         return 2
 
     try:
         return args.func(args)  # type: ignore[attr-defined]
-    except Exception as e:
-        print(f"{Fore.RED}Falha:{Style.RESET_ALL} {e}")
+    except Exception:
         return 1
 
 

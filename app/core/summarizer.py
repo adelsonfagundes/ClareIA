@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Optional
+import re
 
 from app.core.config import get_settings
 from app.models.summary import MeetingSummary
@@ -11,18 +11,42 @@ from app.services.openai_client import get_openai_client
 
 logger = logging.getLogger(__name__)
 
+# Constante para limite de resumo
+SUMMARY_PREVIEW_LENGTH = 500
+
+
+def _extract_json_from_content(content: str) -> dict | None:
+    """Extrai JSON de uma string de conteúdo."""
+    json_match = re.search(r"\{.*\}", content, re.DOTALL)
+    if json_match:
+        try:
+            return json.loads(json_match.group())
+        except json.JSONDecodeError:
+            return None
+    return None
+
+
+def _create_fallback_summary(text: str) -> MeetingSummary:
+    """Cria um resumo básico como fallback."""
+    preview = text[:SUMMARY_PREVIEW_LENGTH] + "..." if len(text) > SUMMARY_PREVIEW_LENGTH else text
+    return MeetingSummary(
+        title="Transcrição Processada",
+        summary=preview,
+        key_points=["Não foi possível extrair pontos principais automaticamente"],
+        decisions=[],
+        action_items=[],
+        insights=["Revise a transcrição manualmente para extrair insights"],
+    )
+
 
 def summarize_transcript(
     transcript: Transcript | str,
     *,
-    model: Optional[str] = None,
-    temperature: Optional[float] = None,
-    extra_context: Optional[str] = None,
+    model: str | None = None,
+    temperature: float | None = None,
+    extra_context: str | None = None,
 ) -> MeetingSummary:
-    """
-    Gera ata/insights estruturados a partir do transcript usando a API de chat.
-    Retorna um MeetingSummary validado pelo Pydantic.
-    """
+    """Gera ata/insights estruturados a partir do transcript usando a API de chat."""
     settings = get_settings()
     client = get_openai_client()
 
@@ -32,9 +56,9 @@ def summarize_transcript(
     text = transcript.text if isinstance(transcript, Transcript) else str(transcript)
 
     # Instruções do sistema
-    system_prompt = """Você é um assistente especialista em reuniões corporativas. 
+    system_prompt = """Você é um assistente especialista em reuniões corporativas.
     Dado o transcript em português do Brasil, gere uma ata clara e objetiva.
-    
+
     Retorne um JSON válido com a seguinte estrutura:
     {
         "title": "Título da reunião (opcional)",
@@ -50,7 +74,7 @@ def summarize_transcript(
         ],
         "insights": ["Lista de insights relevantes, métricas ou riscos identificados"]
     }
-    
+
     Seja fiel ao conteúdo, use português natural e destaque decisões e tarefas importantes.
     Retorne APENAS o JSON, sem explicações adicionais."""
 
@@ -64,7 +88,7 @@ def summarize_transcript(
 
     user_prompt += f"Transcript:\n{text}"
 
-    logger.info(f"Gerando ata/insights | modelo={model}")
+    logger.info("Gerando ata/insights | modelo=%s", model)
 
     try:
         # Usa a API de chat completions padrão
@@ -72,39 +96,27 @@ def summarize_transcript(
             model=model,
             messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
             temperature=temperature,
-            response_format={"type": "json_object"},  # Força resposta em JSON
+            response_format={"type": "json_object"},
             max_tokens=4000,
         )
 
-        # Extrai o conteúdo da resposta
         content = response.choices[0].message.content
 
-        # Parse do JSON
         try:
             parsed = json.loads(content)
         except json.JSONDecodeError as e:
-            logger.error(f"Falha ao fazer parse do JSON: {e}")
-            logger.debug(f"Resposta recebida: {content[:500]}")
+            logger.exception("Falha ao fazer parse do JSON")
+            logger.debug("Resposta recebida: %s", content[:500])
 
-            # Tenta extrair JSON de forma mais robusta
-            import re
+            parsed = _extract_json_from_content(content)
+            if not parsed:
+                msg = f"Não foi possível extrair JSON válido da resposta: {e}"
+                raise ValueError(msg) from e
 
-            json_match = re.search(r"\{.*\}", content, re.DOTALL)
-            if json_match:
-                try:
-                    parsed = json.loads(json_match.group())
-                except:
-                    raise ValueError(f"Não foi possível extrair JSON válido da resposta: {e}")
-            else:
-                raise ValueError(f"Resposta não contém JSON válido: {e}")
-
-        # Valida com Pydantic
         summary = MeetingSummary.model_validate(parsed)
 
     except Exception as e:
-        logger.error(f"Erro na API de resumo: {e}")
-
-        # Fallback: tenta sem response_format
+        logger.exception("Erro na API de resumo")
         logger.info("Tentando fallback sem response_format...")
 
         try:
@@ -116,28 +128,18 @@ def summarize_transcript(
             )
 
             content = response.choices[0].message.content
+            parsed = _extract_json_from_content(content)
 
-            # Extrai JSON da resposta
-            import re
-
-            json_match = re.search(r"\{.*\}", content, re.DOTALL)
-            if json_match:
-                parsed = json.loads(json_match.group())
+            if parsed:
                 summary = MeetingSummary.model_validate(parsed)
             else:
-                # Último fallback: cria resumo básico
                 logger.warning("Criando resumo básico como fallback")
-                summary = MeetingSummary(
-                    title="Transcrição Processada",
-                    summary=text[:500] + "..." if len(text) > 500 else text,
-                    key_points=["Não foi possível extrair pontos principais automaticamente"],
-                    decisions=[],
-                    action_items=[],
-                    insights=["Revise a transcrição manualmente para extrair insights"],
-                )
+                summary = _create_fallback_summary(text)
+
         except Exception as fallback_error:
-            logger.error(f"Fallback também falhou: {fallback_error}")
-            raise ValueError(f"Não foi possível gerar o resumo: {e}")
+            logger.exception("Fallback também falhou")
+            msg = f"Não foi possível gerar o resumo: {e}"
+            raise ValueError(msg) from fallback_error
 
     logger.info("Ata/insights gerados com sucesso")
     return summary
