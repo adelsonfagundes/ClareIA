@@ -1,7 +1,7 @@
 # 📋 TODO - ClareIA Features
 
 > Funcionalidades e melhorias para o usuário final  
-> Última atualização: 09/08/2025
+> Última atualização: 10/08/2025
 
 ## 🚀 Features Principais
 
@@ -35,7 +35,7 @@
 - [ ] **ChatGPT** - Fazer perguntas sobre a reunião
 
 ### 🎨 Interface Web - Novas Features
-- [ ] **Player de áudio com transcrição sincronizada** - Destacar texto enquanto toca
+- [x] **Player de áudio com transcrição sincronizada** - Destacar texto enquanto toca ✅ **COMPLETO**
 - [ ] **Editor de transcrição rico** - Formatar, destacar, adicionar notas
 - [ ] **Modo apresentação** - Exibir ata em tela cheia
 - [ ] **Comentários na transcrição** - Adicionar observações em trechos
