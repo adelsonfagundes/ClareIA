@@ -78,7 +78,7 @@ class Transcript(BaseModel):
 
             return Transcript(text=text, language=lang, segments=segments or None, source_path=source_path)
 
-        except Exception as e:
+        except Exception:
             import logging
 
             logger = logging.getLogger(__name__)

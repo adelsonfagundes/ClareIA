@@ -5,7 +5,6 @@ Interface web intuitiva para transcrição e sumarização de áudios com OpenAI
 
 from __future__ import annotations
 
-import contextlib
 import json
 import sys
 import tempfile
@@ -31,8 +30,10 @@ try:
     from app import __version__
     from app.components.audio_player import create_simple_audio_player, create_synchronized_player
     from app.core.config import get_settings
+    from app.core.email_generator import generate_follow_up_email
     from app.core.summarizer import summarize_transcript
     from app.core.transcriber import transcribe_file
+    from app.models.email import EmailFollowUp
 
     APP_VERSION = __version__
 except ImportError:
@@ -40,6 +41,7 @@ except ImportError:
     import __init__ as app_init
     from components.audio_player import create_simple_audio_player, create_synchronized_player
     from core.config import get_settings
+    from core.email_generator import generate_follow_up_email
     from core.summarizer import summarize_transcript
     from core.transcriber import transcribe_file
 
@@ -109,6 +111,13 @@ st.markdown(
     /* Sidebar com largura fixa */
     section[data-testid="stSidebar"] {
         width: 300px !important;
+    }
+    
+    /* Estilo para email preview */
+    .email-preview {
+        border: 1px solid #e1e4e8;
+        border-radius: 8px;
+        overflow: hidden;
     }
     </style>
     """,
@@ -200,6 +209,179 @@ def display_transcript(transcript: Transcript, audio_path: Path | None = None, k
             )
 
 
+def display_email_generator(summary: MeetingSummary, key_suffix: str = "") -> None:
+    """Exibe o gerador de email de follow-up."""
+    with st.expander("📧 **Gerar Email de Follow-up**", expanded=False):
+        st.markdown("### ⚙️ Configurações do Email")
+        st.caption("Personalize as informações para gerar um email profissional")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            meeting_date = st.date_input(
+                "📅 Data da Reunião",
+                value=datetime.now().date(),
+                key=f"email_meeting_date_{key_suffix}",
+                help="Data em que a reunião aconteceu",
+            )
+
+            sender_name = st.text_input(
+                "👤 Seu Nome",
+                placeholder="Ex: João Silva",
+                key=f"email_sender_{key_suffix}",
+                help="Nome que aparecerá como remetente",
+            )
+
+        with col2:
+            company_name = st.text_input(
+                "🏢 Empresa (opcional)",
+                placeholder="Ex: Empresa XYZ Ltda",
+                key=f"email_company_{key_suffix}",
+                help="Nome da empresa ou organização",
+            )
+
+            custom_context = st.text_area(
+                "📝 Contexto Adicional (opcional)",
+                placeholder="Ex: Reunião quinzenal do time de produto\nRevisão dos OKRs do Q4",
+                height=80,
+                key=f"email_context_{key_suffix}",
+                help="Informações extras sobre o contexto da reunião",
+            )
+
+        # Botão para gerar email
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button(
+                "✨ Gerar Email de Follow-up",
+                type="primary",
+                key=f"generate_email_{key_suffix}",
+                use_container_width=True,
+            ):
+                with st.spinner("🤖 Gerando email personalizado..."):
+                    try:
+                        email = generate_follow_up_email(
+                            summary,
+                            meeting_date=meeting_date.strftime("%d/%m/%Y") if meeting_date else None,
+                            sender_name=sender_name if sender_name else None,
+                            company_name=company_name if company_name else None,
+                            custom_context=custom_context if custom_context else None,
+                        )
+
+                        st.session_state[f"email_{key_suffix}"] = email
+                        st.success("✅ Email gerado com sucesso!")
+                        st.balloons()
+
+                    except Exception as e:
+                        st.error(f"❌ Erro ao gerar email: {e}")
+                        if st.checkbox("Mostrar detalhes do erro", key=f"email_error_{key_suffix}"):
+                            st.exception(e)
+
+        # Exibir email gerado se existir
+        if f"email_{key_suffix}" in st.session_state:
+            email = st.session_state[f"email_{key_suffix}"]
+
+            st.divider()
+            st.markdown("### 📧 Email Gerado")
+
+            # Mostrar assunto em destaque
+            st.markdown(f"**📬 Assunto:** `{email.subject}`")
+
+            # Tabs para diferentes visualizações
+            email_tab1, email_tab2, email_tab3 = st.tabs(["🎨 Visualização HTML", "📄 Texto Simples", "⚙️ Dados JSON"])
+
+            with email_tab1:
+                st.markdown("#### 📱 Preview do Email (HTML)")
+                st.caption("Como o email aparecerá nos clientes de email que suportam HTML")
+
+                # Container com classe CSS para styling
+                with st.container():
+                    st.components.v1.html(email.to_html(), height=700, scrolling=True)
+
+            with email_tab2:
+                st.markdown("#### 📝 Versão em Texto Simples")
+                st.caption("Para clientes de email que não suportam HTML ou preferência do usuário")
+
+                st.text_area(
+                    "Conteúdo do email:",
+                    email.to_plain_text(),
+                    height=500,
+                    key=f"email_plain_{key_suffix}",
+                    help="Você pode copiar este texto e colar em seu cliente de email",
+                )
+
+            with email_tab3:
+                st.markdown("#### 🔧 Estrutura de Dados")
+                st.caption("Dados estruturados do email para integração com outras ferramentas")
+
+                email_dict = email.model_dump()
+                st.json(email_dict)
+
+            # Seção de downloads
+            st.divider()
+            st.markdown("### 💾 Downloads Disponíveis")
+
+            col1, col2, col3 = st.columns(3)
+
+            timestamp = datetime.now(tz=UTC).strftime("%Y%m%d_%H%M%S")
+
+            with col1:
+                st.download_button(
+                    label="📧 Baixar HTML",
+                    data=email.to_html(),
+                    file_name=f"followup_email_{timestamp}.html",
+                    mime="text/html",
+                    key=f"download_email_html_{key_suffix}",
+                    help="Arquivo HTML para abrir no navegador ou anexar",
+                )
+
+            with col2:
+                st.download_button(
+                    label="📄 Baixar Texto",
+                    data=email.to_plain_text(),
+                    file_name=f"followup_email_{timestamp}.txt",
+                    mime="text/plain",
+                    key=f"download_email_txt_{key_suffix}",
+                    help="Arquivo de texto simples para copiar e colar",
+                )
+
+            with col3:
+                st.download_button(
+                    label="🔧 Baixar JSON",
+                    data=json.dumps(email.model_dump(), ensure_ascii=False, indent=2),
+                    file_name=f"followup_email_{timestamp}.json",
+                    mime="application/json",
+                    key=f"download_email_json_{key_suffix}",
+                    help="Dados estruturados para integração",
+                )
+
+            # Dicas de uso
+            with st.expander("💡 **Dicas de Uso**", expanded=False):
+                st.markdown("""
+                #### 📧 Como usar o email gerado:
+                
+                **Opção 1 - Copiar e Colar:**
+                - Use a aba "📄 Texto Simples"
+                - Copie todo o conteúdo
+                - Cole em seu cliente de email (Gmail, Outlook, etc.)
+                
+                **Opção 2 - Arquivo HTML:**
+                - Baixe o arquivo HTML
+                - Abra no navegador para visualizar
+                - Use como modelo ou anexe ao email
+                
+                **Opção 3 - Personalização:**
+                - Baixe o JSON para integração com outras ferramentas
+                - Modifique o texto conforme necessário
+                - Adicione informações específicas da sua empresa
+                
+                #### ✨ Dicas para melhor resultado:
+                - Preencha todas as informações opcionais
+                - Seja específico no contexto adicional
+                - Revise o conteúdo antes de enviar
+                - Personalize a saudação e fechamento se necessário
+                """)
+
+
 def display_summary(summary: MeetingSummary, key_suffix: str = "") -> None:
     """Exibe o resumo/ata de forma estruturada."""
     with st.container():
@@ -238,6 +420,9 @@ def display_summary(summary: MeetingSummary, key_suffix: str = "") -> None:
                     st.info(f"💭 {insight}")
 
         st.divider()
+
+        # Downloads da ata
+        st.markdown("### 💾 Downloads da Ata")
         col1, col2 = st.columns(2)
 
         timestamp = datetime.now(tz=UTC).strftime("%Y%m%d_%H%M%S")
@@ -265,6 +450,11 @@ def display_summary(summary: MeetingSummary, key_suffix: str = "") -> None:
                 mime="text/markdown",
                 key=f"download_summary_md_{key_suffix}",
             )
+
+        st.divider()
+
+        # Gerador de email de follow-up
+        display_email_generator(summary, key_suffix)
 
 
 def _create_markdown_from_summary(summary: MeetingSummary) -> str:
@@ -397,7 +587,7 @@ def _setup_sidebar() -> dict:
         st.subheader("🎤 Transcrição")
         config["transcribe_model"] = st.selectbox(
             "Modelo",
-            ["whisper-1", "gpt-4o-mini-transcribe"],
+            ["whisper-1", "gpt-4o-transcribe"],
             help="whisper-1 suporta timestamps para player sincronizado",
             key="sidebar_transcribe_model",
         )
@@ -411,7 +601,7 @@ def _setup_sidebar() -> dict:
 
         format_options = (
             ["json", "text"]
-            if config["transcribe_model"] == "gpt-4o-mini-transcribe"
+            if config["transcribe_model"] == "gpt-4o-transcribe"
             else ["verbose_json", "json", "text", "srt", "vtt"]
         )
 
@@ -476,6 +666,10 @@ def _setup_sidebar() -> dict:
             for key in ["transcript", "summary", "processing_time", "summary_time", "audio_path"]:
                 if key in st.session_state:
                     del st.session_state[key]
+            # Limpar emails gerados também
+            keys_to_remove = [k for k in st.session_state.keys() if k.startswith("email_")]
+            for key in keys_to_remove:
+                del st.session_state[key]
             st.success("Sessão limpa!")
             st.rerun()
 
@@ -585,6 +779,7 @@ def _show_help_tab() -> None:
         3. **Transcreva** o áudio para texto
         4. **Gere a ata** com insights estruturados
         5. **Baixe** os resultados em JSON ou Markdown
+        6. **Gere email de follow-up** automaticamente
 
         #### 🎵 Player Sincronizado
 
@@ -600,6 +795,14 @@ def _show_help_tab() -> None:
         - Destaque automático do texto atual
         - Scroll automático suave
         - Barra de progresso clicável
+
+        #### 📧 Email de Follow-up
+
+        **Novo! Gere emails profissionais:**
+        1. Gere uma ata primeiro
+        2. Expanda "📧 Gerar Email de Follow-up"
+        3. Preencha as informações
+        4. Baixe em HTML ou texto
 
         #### 📝 Formatos Suportados
 
@@ -617,7 +820,7 @@ def _show_help_tab() -> None:
 
         **Transcrição:**
         - `whisper-1`: **Recomendado** - Suporta timestamps
-        - `gpt-4o-mini-transcribe`: Mais recente, sem timestamps
+        - `gpt-4o-transcribe`: Mais recente, sem timestamps
 
         **Formatos de resposta:**
         - `verbose_json`: **Habilita player sincronizado**
@@ -635,6 +838,7 @@ def _show_help_tab() -> None:
         - **Player sincronizado** = whisper-1 + verbose_json
         - Use **dicas contextuais** para nomes próprios
         - **Temperatura baixa** (0.2) para resumos objetivos
+        - **Preencha informações** para emails melhores
         - **Limpe a sessão** para começar do zero
 
         #### 🔧 Solução de Problemas
@@ -643,10 +847,15 @@ def _show_help_tab() -> None:
         - Use whisper-1 + verbose_json
         - Verifique se o áudio foi processado
 
-        **Player ainda estreito?**
-        - Faça hard refresh (Ctrl+F5)
-        - Verifique zoom do navegador (100%)
-        - Teste em aba anônima
+        **Email não gerado?**
+        - Gere a ata primeiro
+        - Verifique a conexão com a API
+        - Tente com informações mais simples
+
+        **Erro de transcrição:**
+        - Verifique o formato do arquivo
+        - Confirme que tem menos de 25MB
+        - Teste com áudio de melhor qualidade
         """)
 
     st.divider()

@@ -159,7 +159,7 @@ def _process_transcription_result(
             text_value = data.get("text") or ""
         return Transcript(text=text_value, language=language, segments=None, source_path=file_path)
 
-    except Exception as e:
+    except Exception:
         logger.exception("Erro ao processar resultado da transcrição")
         # Fallback: criar transcript básico
         fallback_text = str(result) if result else "Erro na transcrição"
