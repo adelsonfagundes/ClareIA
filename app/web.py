@@ -587,7 +587,7 @@ def _setup_sidebar() -> dict:
         st.subheader("🎤 Transcrição")
         config["transcribe_model"] = st.selectbox(
             "Modelo",
-            ["whisper-1", "gpt-4o-transcribe"],
+            ["whisper-1", "gpt-4o-mini-transcribe"],
             help="whisper-1 suporta timestamps para player sincronizado",
             key="sidebar_transcribe_model",
         )
@@ -601,7 +601,7 @@ def _setup_sidebar() -> dict:
 
         format_options = (
             ["json", "text"]
-            if config["transcribe_model"] == "gpt-4o-transcribe"
+            if config["transcribe_model"] == "gpt-4o-mini-transcribe"
             else ["verbose_json", "json", "text", "srt", "vtt"]
         )
 
@@ -820,7 +820,7 @@ def _show_help_tab() -> None:
 
         **Transcrição:**
         - `whisper-1`: **Recomendado** - Suporta timestamps
-        - `gpt-4o-transcribe`: Mais recente, sem timestamps
+        - `gpt-4o-mini-transcribe`: Mais recente, sem timestamps
 
         **Formatos de resposta:**
         - `verbose_json`: **Habilita player sincronizado**
