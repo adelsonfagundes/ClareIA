@@ -96,7 +96,7 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "Ferramenta para transcrever áudios e gerar ata/insights com OpenAI.\n\n"
             "Compatibilidade de formatos:\n"
-            "- gpt-4o-transcribe: suporta apenas response_format = json ou text\n"
+            "- gpt-4o-mini-transcribe: suporta apenas response_format = json ou text\n"
             "- whisper-1: suporta json, text, verbose_json, srt, vtt"
         ),
         formatter_class=argparse.RawTextHelpFormatter,
@@ -111,7 +111,7 @@ def build_parser() -> argparse.ArgumentParser:
         "-m",
         "--model",
         default=None,
-        help="Modelo de transcrição (ex: gpt-4o-transcribe, whisper-1)",
+        help="Modelo de transcrição (ex: gpt-4o-mini-transcribe, whisper-1)",
     )
     p_tr.add_argument("-l", "--language", default=None, help="Idioma (ex: pt)")
     p_tr.add_argument(
@@ -121,7 +121,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["text", "json", "verbose_json", "srt", "vtt"],
         help=(
             "Formato de saída da API de transcrição.\n"
-            "- gpt-4o-transcribe: use 'json' ou 'text'\n"
+            "- gpt-4o-mini-transcribe: use 'json' ou 'text'\n"
             "- whisper-1: permite 'verbose_json'/'srt'/'vtt' (além de 'json'/'text')"
         ),
     )

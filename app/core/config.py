@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # Carrega automaticamente .env e .env.local
 try:
@@ -42,7 +42,7 @@ class Settings(BaseModel):
     openai_max_retries: int = Field(default_factory=lambda: int(os.getenv("OPENAI_MAX_RETRIES", "3")))
 
     # Transcrição
-    default_transcribe_model: str = os.getenv("TRANSCRIBE_MODEL", "gpt-4o-transcribe")
+    default_transcribe_model: str = os.getenv("TRANSCRIBE_MODEL", "gpt-4o-mini-transcribe")
     default_language: str = os.getenv("TRANSCRIBE_LANGUAGE", "pt")
     default_response_format: Literal["text", "json", "verbose_json", "srt", "vtt"] = os.getenv(
         "TRANSCRIBE_FORMAT", "json"
@@ -51,6 +51,35 @@ class Settings(BaseModel):
     # Summarizer
     summary_model: str = os.getenv("SUMMARY_MODEL", "gpt-4o-mini")
     summary_temperature: float = Field(default_factory=lambda: float(os.getenv("SUMMARY_TEMPERATURE", "0.2")))
+
+    @field_validator("openai_timeout", mode="before")
+    @classmethod
+    def validate_timeout(cls, v):
+        """Valida timeout como float."""
+        try:
+            return float(v)
+        except (ValueError, TypeError):
+            return 120.0
+
+    @field_validator("openai_max_retries", mode="before")
+    @classmethod
+    def validate_max_retries(cls, v):
+        """Valida max_retries como int."""
+        try:
+            return int(v)
+        except (ValueError, TypeError):
+            return 3
+
+    @field_validator("summary_temperature", mode="before")
+    @classmethod
+    def validate_temperature(cls, v):
+        """Valida temperature como float."""
+        try:
+            temp = float(v)
+            # Garantir que está no range válido
+            return max(0.0, min(1.0, temp))
+        except (ValueError, TypeError):
+            return 0.2
 
 
 class SettingsManager:

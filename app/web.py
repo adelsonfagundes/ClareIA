@@ -57,48 +57,58 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# CSS customizado
+# CSS customizado - Forçar largura total para o player
 st.markdown(
     """
     <style>
+    /* Container principal sem limitações */
+    .main .block-container {
+        max-width: 100% !important;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    
+    /* Forçar largura total para componentes HTML */
+    div[data-testid="stHtml"] {
+        width: 100% !important;
+    }
+    
+    /* Iframe do componente sem limitações */
+    iframe[title="st.components.v1.html"] {
+        width: 100% !important;
+        border: none;
+    }
+    
+    /* Container do iframe */
+    .element-container:has(iframe[title="st.components.v1.html"]) {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    
+    /* Estilos gerais da aplicação */
     .stApp {
-        max-width: 1400px;
-        margin: 0 auto;
+        max-width: 100% !important;
     }
-    .success-box {
-        padding: 1rem;
-        border-radius: 0.5rem;
-        background-color: #d4edda;
-        border: 1px solid #c3e6cb;
-        color: #155724;
-        margin: 1rem 0;
-    }
-    .error-box {
-        padding: 1rem;
-        border-radius: 0.5rem;
-        background-color: #f8d7da;
-        border: 1px solid #f5c6cb;
-        color: #721c24;
-        margin: 1rem 0;
-    }
-    .info-box {
-        padding: 1rem;
-        border-radius: 0.5rem;
-        background-color: #d1ecf1;
-        border: 1px solid #bee5eb;
-        color: #0c5460;
-        margin: 1rem 0;
-    }
+    
     div[data-testid="stMetricValue"] {
         font-size: 1.5rem;
     }
+    
     .stTabs [data-baseweb="tab-list"] {
         gap: 24px;
     }
+    
     .stTabs [data-baseweb="tab"] {
         height: 50px;
         padding-left: 20px;
         padding-right: 20px;
+    }
+    
+    /* Sidebar com largura fixa */
+    section[data-testid="stSidebar"] {
+        width: 300px !important;
     }
     </style>
     """,
@@ -143,14 +153,17 @@ def display_transcript(transcript: Transcript, audio_path: Path | None = None, k
     if audio_path and transcript.segments:
         st.markdown("### 🎵 Player Sincronizado")
         st.info("💡 Clique em qualquer trecho da transcrição para pular para aquele momento no áudio!")
-        create_synchronized_player(audio_path, transcript, height=650)
+
+        # Player sincronizado com largura total
+        create_synchronized_player(audio_path, transcript, height=750)
+
         st.divider()
     elif audio_path:
         st.markdown("### 🎵 Player de Áudio")
         create_simple_audio_player(audio_path)
         st.divider()
 
-    with st.expander("📝 **Transcrição Completa**", expanded=not bool(transcript.segments)):
+    with st.expander("📝 **Transcrição Completa em Texto**", expanded=False):
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("Caracteres", f"{len(transcript.text):,}")
@@ -384,7 +397,7 @@ def _setup_sidebar() -> dict:
         st.subheader("🎤 Transcrição")
         config["transcribe_model"] = st.selectbox(
             "Modelo",
-            ["whisper-1", "gpt-4o-transcribe"],
+            ["whisper-1", "gpt-4o-mini-transcribe"],
             help="whisper-1 suporta timestamps para player sincronizado",
             key="sidebar_transcribe_model",
         )
@@ -398,7 +411,7 @@ def _setup_sidebar() -> dict:
 
         format_options = (
             ["json", "text"]
-            if config["transcribe_model"] == "gpt-4o-transcribe"
+            if config["transcribe_model"] == "gpt-4o-mini-transcribe"
             else ["verbose_json", "json", "text", "srt", "vtt"]
         )
 
@@ -586,6 +599,7 @@ def _show_help_tab() -> None:
         - Controle de velocidade (0.5x a 2x)
         - Destaque automático do texto atual
         - Scroll automático suave
+        - Barra de progresso clicável
 
         #### 📝 Formatos Suportados
 
@@ -603,7 +617,7 @@ def _show_help_tab() -> None:
 
         **Transcrição:**
         - `whisper-1`: **Recomendado** - Suporta timestamps
-        - `gpt-4o-transcribe`: Mais recente, sem timestamps
+        - `gpt-4o-mini-transcribe`: Mais recente, sem timestamps
 
         **Formatos de resposta:**
         - `verbose_json`: **Habilita player sincronizado**
@@ -629,9 +643,10 @@ def _show_help_tab() -> None:
         - Use whisper-1 + verbose_json
         - Verifique se o áudio foi processado
 
-        **Erro de transcrição:**
-        - Verifique o formato do arquivo
-        - Confirme que tem menos de 25MB
+        **Player ainda estreito?**
+        - Faça hard refresh (Ctrl+F5)
+        - Verifique zoom do navegador (100%)
+        - Teste em aba anônima
         """)
 
     st.divider()

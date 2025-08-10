@@ -4,7 +4,7 @@ Ferramenta moderna em Python 3.13 para transcrição inteligente e análise de r
 - 🎙️ **Transcrição precisa** de áudios (.mp3/.wav/.m4a) em português do Brasil usando OpenAI
 - 📊 **Geração automática** de atas estruturadas com decisões, itens de ação e insights
 - 🖥️ **Interface Web intuitiva** com Streamlit para uso simplificado
-- 🤖 **Suporte completo** aos modelos mais recentes da OpenAI (gpt-4o-transcribe e whisper-1)
+- 🤖 **Suporte completo** aos modelos mais recentes da OpenAI (gpt-4o-mini-transcribe e whisper-1)
 
 ---
 
@@ -173,7 +173,7 @@ export OPENAI_MAX_RETRIES=5
 
 | Modelo | Formatos | Características |
 |--------|----------|----------------|
-| **gpt-4o-transcribe** | `json`, `text` | Mais recente e preciso, otimizado para português |
+| **gpt-4o-mini-transcribe** | `json`, `text` | Mais recente e preciso, otimizado para português |
 | **whisper-1** | `json`, `text`, `verbose_json`, `srt`, `vtt` | Suporta timestamps e legendas |
 
 ### Sumarização
@@ -215,7 +215,7 @@ ClareIA/
 | Variável | Padrão | Descrição |
 |----------|--------|-----------|
 | `OPENAI_API_KEY` | - | **Obrigatória** - Sua chave da API |
-| `TRANSCRIBE_MODEL` | `gpt-4o-transcribe` | Modelo de transcrição |
+| `TRANSCRIBE_MODEL` | `gpt-4o-mini-transcribe` | Modelo de transcrição |
 | `TRANSCRIBE_LANGUAGE` | `pt` | Idioma padrão |
 | `TRANSCRIBE_FORMAT` | `json` | Formato de saída |
 | `SUMMARY_MODEL` | `gpt-4o-mini` | Modelo para resumos |
