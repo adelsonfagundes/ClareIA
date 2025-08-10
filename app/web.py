@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 # Importações do ClareIA
 try:
     from app import __version__
+    from app.components.audio_player import create_simple_audio_player, create_synchronized_player
     from app.core.config import get_settings
     from app.core.summarizer import summarize_transcript
     from app.core.transcriber import transcribe_file
@@ -37,6 +38,7 @@ try:
 except ImportError:
     # Fallback para quando executado diretamente
     import __init__ as app_init
+    from components.audio_player import create_simple_audio_player, create_synchronized_player
     from core.config import get_settings
     from core.summarizer import summarize_transcript
     from core.transcriber import transcribe_file
@@ -134,9 +136,21 @@ def save_uploaded_file(uploaded_file: UploadedFile) -> Path:
     return temp_path
 
 
-def display_transcript(transcript: Transcript, key_suffix: str = "") -> None:
-    """Exibe a transcrição de forma formatada."""
-    with st.expander("📝 **Transcrição Completa**", expanded=True):
+def display_transcript(transcript: Transcript, audio_path: Path | None = None, key_suffix: str = "") -> None:
+    """Exibe a transcrição de forma formatada com player sincronizado opcional."""
+
+    # Se temos um caminho de áudio e timestamps, mostrar player sincronizado
+    if audio_path and transcript.segments:
+        st.markdown("### 🎵 Player Sincronizado")
+        st.info("💡 Clique em qualquer trecho da transcrição para pular para aquele momento no áudio!")
+        create_synchronized_player(audio_path, transcript, height=650)
+        st.divider()
+    elif audio_path:
+        st.markdown("### 🎵 Player de Áudio")
+        create_simple_audio_player(audio_path)
+        st.divider()
+
+    with st.expander("📝 **Transcrição Completa**", expanded=not bool(transcript.segments)):
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("Caracteres", f"{len(transcript.text):,}")
@@ -156,7 +170,10 @@ def display_transcript(transcript: Transcript, key_suffix: str = "") -> None:
 
         col1, col2 = st.columns(2)
         with col1:
-            st.info("💡 Use Ctrl+A para selecionar todo o texto")
+            if transcript.segments:
+                st.success(f"✅ {len(transcript.segments)} segmentos com timestamps disponíveis")
+            else:
+                st.info("💡 Use whisper-1 com verbose_json para obter timestamps")
 
         with col2:
             transcript_json = json.dumps(transcript.model_dump(), ensure_ascii=False, indent=2)
@@ -276,12 +293,12 @@ def _handle_transcription(uploaded_file: UploadedFile, config: dict) -> None:
 
             st.session_state["transcript"] = transcript
             st.session_state["processing_time"] = processing_time
-
-            with contextlib.suppress(Exception):
-                temp_path.unlink(missing_ok=True)
+            st.session_state["audio_path"] = temp_path
 
             st.success(f"✅ Transcrição concluída em {format_time_duration(processing_time)}!")
-            display_transcript(transcript, key_suffix="tab1_new")
+
+            # Exibir com player sincronizado se disponível
+            display_transcript(transcript, audio_path=temp_path, key_suffix="tab1_new")
 
         except Exception as e:
             st.error(f"❌ Erro na transcrição: {e!s}")
@@ -367,8 +384,8 @@ def _setup_sidebar() -> dict:
         st.subheader("🎤 Transcrição")
         config["transcribe_model"] = st.selectbox(
             "Modelo",
-            ["gpt-4o-transcribe", "whisper-1"],
-            help="gpt-4o-transcribe é mais recente e preciso",
+            ["whisper-1", "gpt-4o-transcribe"],
+            help="whisper-1 suporta timestamps para player sincronizado",
             key="sidebar_transcribe_model",
         )
 
@@ -382,15 +399,27 @@ def _setup_sidebar() -> dict:
         format_options = (
             ["json", "text"]
             if config["transcribe_model"] == "gpt-4o-transcribe"
-            else ["json", "text", "verbose_json", "srt", "vtt"]
+            else ["verbose_json", "json", "text", "srt", "vtt"]
         )
+
+        # Selecionar verbose_json por padrão para whisper-1
+        default_format = "verbose_json" if config["transcribe_model"] == "whisper-1" else "json"
 
         config["response_format"] = st.selectbox(
             "Formato de Resposta",
             format_options,
-            help="verbose_json/srt/vtt disponíveis apenas com whisper-1",
+            index=format_options.index(default_format) if default_format in format_options else 0,
+            help="Use 'verbose_json' com whisper-1 para habilitar player sincronizado",
             key="sidebar_response_format",
         )
+
+        # Aviso sobre player sincronizado
+        if config["transcribe_model"] == "whisper-1" and config["response_format"] == "verbose_json":
+            st.success("✅ Player sincronizado será habilitado!")
+        elif config["transcribe_model"] == "whisper-1":
+            st.info("💡 Use 'verbose_json' para habilitar player sincronizado")
+        else:
+            st.warning("⚠️ Player sincronizado requer whisper-1 + verbose_json")
 
         config["prompt_hint"] = st.text_area(
             "Dica Contextual (opcional)",
@@ -431,13 +460,13 @@ def _setup_sidebar() -> dict:
         st.divider()
 
         if st.button("🗑️ Limpar Sessão", key="clear_session"):
-            for key in ["transcript", "summary", "processing_time", "summary_time"]:
+            for key in ["transcript", "summary", "processing_time", "summary_time", "audio_path"]:
                 if key in st.session_state:
                     del st.session_state[key]
             st.success("Sessão limpa!")
             st.rerun()
 
-        st.caption("💡 Dica: Use whisper-1 se precisar de timestamps")
+        st.caption("🎯 Player sincronizado: whisper-1 + verbose_json")
 
     return config
 
@@ -490,7 +519,8 @@ def _show_transcription_tab(config: dict) -> None:
 
     elif "transcript" in st.session_state:
         st.info("📋 Transcrição anterior disponível")
-        display_transcript(st.session_state["transcript"], key_suffix="tab1_existing")
+        audio_path = st.session_state.get("audio_path")
+        display_transcript(st.session_state["transcript"], audio_path=audio_path, key_suffix="tab1_existing")
 
 
 def _show_summary_tab(config: dict) -> None:
@@ -543,6 +573,20 @@ def _show_help_tab() -> None:
         4. **Gere a ata** com insights estruturados
         5. **Baixe** os resultados em JSON ou Markdown
 
+        #### 🎵 Player Sincronizado
+
+        **Para ativar o player sincronizado:**
+        1. Escolha modelo **whisper-1**
+        2. Selecione formato **verbose_json**
+        3. Faça a transcrição
+        4. O player aparecerá automaticamente!
+
+        **Recursos do player:**
+        - Clique em qualquer trecho para pular
+        - Controle de velocidade (0.5x a 2x)
+        - Destaque automático do texto atual
+        - Scroll automático suave
+
         #### 📝 Formatos Suportados
 
         **Áudio:**
@@ -551,16 +595,6 @@ def _show_help_tab() -> None:
         - M4A
 
         **Tamanho máximo:** 25MB
-
-        #### 🚀 Executando a Aplicação
-
-        ```bash
-        # Opção 1 - Script auxiliar
-        python run_web.py
-
-        # Opção 2 - Comando direto
-        streamlit run app/web.py
-        ```
         """)
 
     with col2:
@@ -568,8 +602,14 @@ def _show_help_tab() -> None:
         #### 🤖 Modelos Disponíveis
 
         **Transcrição:**
-        - `gpt-4o-transcribe`: Mais recente e preciso
-        - `whisper-1`: Suporta timestamps e legendas
+        - `whisper-1`: **Recomendado** - Suporta timestamps
+        - `gpt-4o-transcribe`: Mais recente, sem timestamps
+
+        **Formatos de resposta:**
+        - `verbose_json`: **Habilita player sincronizado**
+        - `json`: Transcrição simples
+        - `text`: Apenas texto
+        - `srt/vtt`: Legendas
 
         **Sumarização:**
         - `gpt-4o-mini`: Rápido e eficiente
@@ -578,20 +618,20 @@ def _show_help_tab() -> None:
 
         #### 💡 Dicas
 
-        - Use **dicas contextuais** para melhorar nomes próprios
+        - **Player sincronizado** = whisper-1 + verbose_json
+        - Use **dicas contextuais** para nomes próprios
         - **Temperatura baixa** (0.2) para resumos objetivos
-        - **whisper-1** se precisar de timestamps
-        - **Limpe a sessão** se quiser começar do zero
+        - **Limpe a sessão** para começar do zero
 
         #### 🔧 Solução de Problemas
 
-        **API Key não encontrada:**
-        - Verifique o arquivo `.env`
-        - Reinicie a aplicação após configurar
+        **Player não aparece?**
+        - Use whisper-1 + verbose_json
+        - Verifique se o áudio foi processado
 
         **Erro de transcrição:**
         - Verifique o formato do arquivo
-        - Confirme que o arquivo tem menos de 25MB
+        - Confirme que tem menos de 25MB
         """)
 
     st.divider()
@@ -622,10 +662,9 @@ def _show_session_stats() -> None:
                 f"{st.session_state.get('processing_time', 0):.1f}s",
             )
         with col2:
-            st.metric(
-                "Caracteres",
-                f"{len(st.session_state['transcript'].text):,}",
-            )
+            transcript = st.session_state["transcript"]
+            segments_info = f"{len(transcript.segments)} segs" if transcript.segments else "Sem timestamps"
+            st.metric("Segmentos", segments_info)
 
     if "summary" in st.session_state and st.session_state.get("summary"):
         with col3:
