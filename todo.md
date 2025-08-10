@@ -22,7 +22,7 @@
 - [ ] **Detecção de concordância/discordância** - Identificar consensos e divergências
 
 ### 📝 Geração de Conteúdo
-- [ ] **Email de follow-up** - Gerar email automático com resumo e ações
+- [x] **Email de follow-up** - Gerar email automático com resumo e ações ✅ **COMPLETO**
 - [ ] **Relatório executivo** - Versão ultra-resumida para C-level
 - [ ] **Checklist de tarefas** - Lista pronta para copiar para Trello/Asana/DevOps
 - [ ] **Calendário de ações** - Arquivo .ics com deadlines
